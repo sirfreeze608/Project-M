@@ -1,3 +1,5 @@
+[The Pacer and MyLang Handbook.html](https://github.com/user-attachments/files/29148351/The.Pacer.and.MyLang.Handbook.html)
+<img width="2720" height="2960" alt="pacer_mylang_architecture" src="https://github.com/user-attachments/assets/809dc7cd-d1a4-446f-bcdd-6209b0945060" />
 # Pacer + mylang
 
 > **Pacer** is a dark-themed Python code editor with a built-in interpreter
