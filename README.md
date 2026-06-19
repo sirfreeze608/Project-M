@@ -1,3 +1,45 @@
+Boredom can also help with creativity
+
+
+
+I spent the last few weeks wandering what I could do with vibe coding. After long thoughts I decided to start building a code editor for personal use, then the thought how about I add an AI assistant to fix errors in my code. I finally got through that hurdle after several changes and tries. 
+
+
+
+At this point i wasn't really into UI experience I just wanted it to work with editing commonly known programming languages for instance python scripts, html files, javascript, C and xml. Once I got that part going I got into making sure it ran in dark mode which is my favorite mode to use. I also named the Code Editor "Pacer Code Editor"
+
+
+
+Now that I got that part out of the way I start looking at syntax highlighting since it aided in identifying commands and error handling. 
+
+
+
+In the heat of excitement of building something fulfilling with an AI a curious thought crossed my mind, since i have a long background in Mathematics, Statistics and Electrical Engineering, how about I build an entirely new programming language that can relate to these fields.
+
+
+
+So I started work on my new programming language called "MyLang" started with the base figuring out what the file extension would be (".ml") for source code files & (".mylang") for libraries and trained the AI with several books related to these topics and got the interpreter and lexer ready. after a few days I had a working base language that could do some basic computational stuff. 
+
+
+The idea got to my head so I started making it more and more complex. Added some more real world useable features for electrical engineers and statistical computation 
+
+
+This whole process was a little frustrating as there were moments the AI broke the hard work I have achieved and I had to revert to old versions and start all over to keep the project on track and not sway from the original design and purpose.
+
+
+In order to verify if this was a unique language I did several test paths with AI agents to show that it was indeed a new language and had its own unique way of handling code and memory management. In noticing the stability of the first version I added crypto, csv parsing as features.
+
+
+Well today I am glad to say it is fully operational now and ready for real world testing, my only fear is how this would be used and the security side of things. I am making it open source and hopefully looking for people's input and opinions and hopefully some help testing use cases. 
+
+
+I am making the whole code readily available on Github with the hope of reaching like minded persons to jump in the fun, if you do understand basic programming language technics, principles and verbatim it would be pretty easy to follow, not to worry i have attached a handbook as well
+
+
+Lets find bugs 😀 for fun
+
+
+
 [The Pacer and MyLang Handbook.html](https://github.com/user-attachments/files/29148351/The.Pacer.and.MyLang.Handbook.html)
 <img width="2720" height="2960" alt="pacer_mylang_architecture" src="https://github.com/user-attachments/assets/809dc7cd-d1a4-446f-bcdd-6209b0945060" />
 # Pacer + mylang
