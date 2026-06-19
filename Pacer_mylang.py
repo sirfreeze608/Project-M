@@ -1,7 +1,3 @@
-"""
-Pacer + mylang  v0.4.0
-A production-ready code editor for the mylang language.
-"""
 
 import sys
 import os
