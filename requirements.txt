@@ -1,0 +1,18 @@
+# Pacer + mylang — Python dependencies
+# Generated for: pip install -r requirements.txt
+#
+# Runtime dependencies — required to run Pacer_mylang.py
+PyQt5==5.15.11
+anthropic==0.40.0
+
+# Build dependency — only required when packaging via build_exe.ps1 / PyInstaller
+pyinstaller==6.21.0
+pyinstaller-hooks-contrib>=2025.0
+
+# ── Notes ──────────────────────────────────────────────────────────────────
+# Everything inside mylang/ (lexer.py, parser.py, interpreter.py, stdlib.py,
+# main.py) uses only the Python standard library — hashlib, hmac, cmath,
+# statistics, dataclasses, enum, json, io, os, re, sys, datetime, shutil,
+# traceback, textwrap, pathlib. No additional packages are required for the
+# language engine itself; only the editor (PyQt5) and AI assistant
+# (anthropic) need third-party installs.
