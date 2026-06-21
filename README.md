@@ -13,7 +13,6 @@
 
 ## Quick Start
 
-<img width="1482" height="575" alt="image" src="https://github.com/user-attachments/assets/4cd644ff-9a45-4166-b98d-589d369148a6" />
 
 
 ### 1. Install dependencies
