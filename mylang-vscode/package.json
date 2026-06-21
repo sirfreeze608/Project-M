@@ -1,0 +1,57 @@
+{
+  "name": "mylang",
+  "displayName": "mylang",
+  "description": "Syntax highlighting, snippets, and run support for .ml (mylang) files",
+  "version": "0.4.0",
+  "publisher": "pacer",
+  "engines": { "vscode": "^1.75.0" },
+  "categories": ["Programming Languages"],
+  "activationEvents": [],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "mylang",
+        "aliases": ["mylang", "ml"],
+        "extensions": [".ml"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "mylang",
+        "scopeName": "source.mylang",
+        "path": "./syntaxes/mylang.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "mylang",
+        "path": "./snippets/mylang.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "mylang.runFile",
+        "title": "mylang: Run File",
+        "icon": "$(play)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "mylang.runFile",
+        "key": "F5",
+        "when": "editorLangId == mylang"
+      }
+    ],
+    "menus": {
+      "editor/title/run": [
+        {
+          "command": "mylang.runFile",
+          "when": "resourceExtname == .ml",
+          "group": "navigation"
+        }
+      ]
+    }
+  }
+}

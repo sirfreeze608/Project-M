@@ -9,8 +9,16 @@ import re
 import io
 import json
 import shutil
+import tempfile
 import datetime
 import traceback
+
+# PyInstaller onefile extracts bundled assets to sys._MEIPASS; script mode uses __file__.
+def _bundle_dir() -> str:
+    if getattr(sys, "frozen", False):
+        return getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+    return os.path.dirname(os.path.abspath(__file__))
+
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QSplitter, QFileSystemModel, QTreeView,
@@ -109,7 +117,7 @@ PROVIDERS = {
 PROVIDER_ORDER = ["anthropic", "openai", "google", "groq", "openrouter"]
 
 # ── Import mylang pipeline ────────────────────────────────────────────────────
-_MYLANG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mylang")
+_MYLANG_DIR = os.path.join(_bundle_dir(), "mylang")
 if _MYLANG_DIR not in sys.path:
     sys.path.insert(0, _MYLANG_DIR)
 
@@ -569,10 +577,11 @@ class SettingsDialog(QDialog):
         ) or "None configured"
 
         g, f = self._group("System Information")
-        base = os.path.dirname(os.path.abspath(__file__))
+        base = _bundle_dir()
         for label, value in [
             ("Python",          sys.version.split()[0]),
-            ("Editor file",     os.path.abspath(__file__)),
+            ("Editor file",     sys.executable if getattr(sys, "frozen", False)
+                                else os.path.abspath(__file__)),
             ("mylang folder",   os.path.join(base, "mylang")),
             ("Settings file",   SETTINGS_PATH),
             ("Backup dir",      _settings.get("backup_dir") or "(not set)"),
@@ -1200,9 +1209,11 @@ class MainWindow(QMainWindow):
         self.create_command_panel()
         self.create_visual_panel()
 
-        # Hook image.show() into the Visual Panel
+        # Hook image.show() and html.show(["panel"]) into the Visual Panel
         import stdlib as _stdlib
-        _stdlib._IMAGE_SHOW_HOOK = self._show_svg
+        _stdlib._IMAGE_SHOW_HOOK    = self._show_svg
+        _stdlib._HTML_PANEL_HOOK    = self._show_html_panel
+        _stdlib._HTML_FILE_DIR_HOOK = self._html_output_dir
 
         # Status bar
         self.status = self.statusBar()
@@ -1296,7 +1307,7 @@ class MainWindow(QMainWindow):
     # ── Icon ──────────────────────────────────────────────────────────────────
 
     def set_window_icon(self):
-        base = os.path.dirname(os.path.abspath(__file__))
+        base = _bundle_dir()
         for name in ["pacer_logo.png","pacer_logo.ico",
                      "icon.png","icon.ico","icons/icon.png"]:
             p = os.path.join(base, name)
@@ -1595,6 +1606,25 @@ class MainWindow(QMainWindow):
             f'<div style="background:#1e1e1e; padding:8px;">{svg_text}</div>')
         self._visual_dock.show()
 
+    def _show_html_panel(self, title: str, html_document: str):
+        """Called by html.show(["panel"]) to render a full mylang HTML page
+        in the same Visual Panel used by image.show(). Qt's QTextEdit only
+        supports a subset of CSS (no flexbox/grid), so layout is simplified
+        compared to the file/browser output, but content and styling carry
+        over fine for headings, tables, result boxes, and code blocks."""
+        self._visual_title_lbl.setText(f"HTML — {title}")
+        self._visual_view.setHtml(html_document)
+        self._visual_dock.show()
+
+    def _html_output_dir(self) -> str:
+        """Where html.show(["file"]) saves generated pages. Prefers an
+        'output/' folder next to the currently open file's project root,
+        falling back to the system temp directory if no file is open."""
+        root = getattr(self, "_project_root", None)
+        if root and os.path.isdir(root):
+            return os.path.join(root, "output")
+        return tempfile.gettempdir()
+
     def _clear_visual(self):
         self._visual_view.clear()
         self._visual_title_lbl.setText("Canvas")
@@ -1687,7 +1717,9 @@ class MainWindow(QMainWindow):
 
         _settings.set("last_project_folder", folder_path)
         _settings.save()
-        self.status.showMessage(f"Project folder: {folder_path}")
+        status = getattr(self, "status", None)
+        if status is not None:
+            status.showMessage(f"Project folder: {folder_path}")
 
     def _shorten_path(self, path: str, max_len: int = 38) -> str:
         if len(path) <= max_len:
@@ -1935,7 +1967,7 @@ class MainWindow(QMainWindow):
                 f"Ln {cur.blockNumber()+1}, Col {cur.columnNumber()+1}")
 
     def _open_docs(self):
-        p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "MYLANG_DOCS.md")
+        p = os.path.join(_bundle_dir(), "MYLANG_DOCS.md")
         if os.path.exists(p):
             self.load_file(p)
         else:
@@ -2168,19 +2200,29 @@ class MainWindow(QMainWindow):
 # =============================================================================
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    app.setStyle("Fusion")
+    try:
+        app = QApplication(sys.argv)
+        app.setStyle("Fusion")
 
-    # App-level icon (taskbar, Alt+Tab, dock)
-    _base = os.path.dirname(os.path.abspath(__file__))
-    for _logo in ["pacer_logo.png","pacer_logo.ico","icon.png","icon.ico"]:
-        _p = os.path.join(_base, _logo)
-        if os.path.exists(_p):
-            app.setWindowIcon(QIcon(_p))
-            break
+        # App-level icon (taskbar, Alt+Tab, dock)
+        _base = _bundle_dir()
+        for _logo in ["pacer_logo.png","pacer_logo.ico","icon.png","icon.ico"]:
+            _p = os.path.join(_base, _logo)
+            if os.path.exists(_p):
+                app.setWindowIcon(QIcon(_p))
+                break
 
-    window = MainWindow()
-    window.show()
-    window.new_ml_file()
+        window = MainWindow()
+        window.show()
+        window.new_ml_file()
 
-    sys.exit(app.exec_())
+        sys.exit(app.exec_())
+    except Exception:
+        if getattr(sys, "frozen", False):
+            from PyQt5.QtWidgets import QMessageBox
+            app = QApplication.instance() or QApplication(sys.argv)
+            QMessageBox.critical(
+                None, "Pacer — Startup Error",
+                f"Failed to start:\n\n{traceback.format_exc()}")
+            sys.exit(1)
+        raise

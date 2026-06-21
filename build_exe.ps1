@@ -1,6 +1,6 @@
 # build_exe.ps1
 # Packages Pacer + mylang into a standalone Windows executable using PyInstaller.
-# Run from the project root (where Pacer_mylang.py and requirements.txt live).
+# Run from the project root (where Pacer_mylang.pyw and requirements.txt live).
 #
 # Usage:
 #   .\build_exe.ps1
@@ -9,7 +9,7 @@
 $ErrorActionPreference = "Stop"
 
 # Define variables
-$EntryPoint = "Pacer_mylang.py"   # Pacer's main entry point
+$EntryPoint = "Pacer_mylang.pyw"  # .pyw = no console window (pythonw.exe subsystem)
 $AppName    = "Pacer"             # Desired name of your final executable (.exe)
 
 # Remove any leftover venv from a previous failed run before starting fresh
@@ -62,7 +62,9 @@ foreach ($p in $requiredPaths) {
 # --onefile:     Bundles everything into a single .exe
 # --name:        Names the output file
 # --clean:       Cleans PyInstaller cache before building
-# --noconsole:   Pacer is a GUI app — suppress the console window
+# --noconsole:   Suppress the console window. The .pyw extension already
+#                signals this to PyInstaller (sets Windows subsystem to GUI),
+#                but --noconsole is kept here as an explicit guarantee.
 # --add-data:    Bundle the mylang/ engine and docs alongside the exe
 #                (Windows uses ';' as the source;dest separator)
 pyinstaller --onefile --name="$AppName" --clean --noconsole `

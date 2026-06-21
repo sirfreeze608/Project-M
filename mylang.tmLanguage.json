@@ -1,0 +1,100 @@
+{
+  "name": "mylang",
+  "scopeName": "source.mylang",
+  "fileTypes": ["ml"],
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#string" },
+    { "include": "#number" },
+    { "include": "#keyword_control" },
+    { "include": "#keyword_declaration" },
+    { "include": "#constant_language" },
+    { "include": "#constant_math" },
+    { "include": "#namespace" },
+    { "include": "#function_decl" },
+    { "include": "#function_call_builtin" },
+    { "include": "#function_call_user" },
+    { "include": "#method_call" },
+    { "include": "#operator" },
+    { "include": "#punctuation" },
+    { "include": "#identifier" }
+  ],
+  "repository": {
+    "comment": {
+      "name": "comment.line.double-slash.mylang",
+      "match": "//.*$"
+    },
+    "string": {
+      "name": "string.quoted.double.mylang",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        { "name": "constant.character.escape.mylang", "match": "\\\\[ntr\"\\\\]" }
+      ]
+    },
+    "number": {
+      "name": "constant.numeric.mylang",
+      "match": "\\b[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?\\b"
+    },
+    "keyword_control": {
+      "name": "keyword.control.mylang",
+      "match": "\\b(if|else|while|for|in|return)\\b"
+    },
+    "keyword_declaration": {
+      "name": "keyword.other.declaration.mylang",
+      "match": "\\b(let|fn)\\b"
+    },
+    "constant_language": {
+      "name": "constant.language.mylang",
+      "match": "\\b(true|false|null)\\b"
+    },
+    "constant_math": {
+      "name": "constant.language.math.mylang",
+      "match": "\\b(PI|E|TAU|PHI|INF|NAN)\\b"
+    },
+    "namespace": {
+      "name": "support.class.namespace.mylang",
+      "match": "\\b(math|stats|ee)(?=\\.)"
+    },
+    "function_decl": {
+      "match": "\\b(fn)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()",
+      "captures": {
+        "1": { "name": "keyword.other.declaration.mylang" },
+        "2": { "name": "entity.name.function.mylang" }
+      }
+    },
+    "function_call_builtin": {
+      "name": "support.function.builtin.mylang",
+      "match": "\\b(print|len|type|str|num|push|pop|range|keys|values|has|del|sqrt|cbrt|pow|abs|floor|ceil|round|sign|clamp|sin|cos|tan|asin|acos|atan|atan2|sinh|cosh|tanh|deg|rad|exp|log|log2|log10|factorial|gcd|lcm|comb|perm|random|rand_int|rand_seed|quadratic|mean|median|mode|stdev|pstdev|variance|pvariance|min|max|sum|data_range|percentile|quartiles|correlation|covariance|linreg|normalize|zscore|histogram|normal_pdf|normal_cdf|voltage|current|resistance|power|power_r|power_v|series|parallel|cap_series|cap_parallel|ind_series|ind_parallel|xc|xl|impedance_rc|impedance_rl|impedance_rlc|resonant_freq|q_factor|bandwidth|rc_tau|rl_tau|rc_charge|rc_discharge|to_db|to_db_power|from_db|from_db_power|vrms|vpeak|phasor|phasor_mag|phasor_angle|complex_add|complex_mul|complex_div|complex_conj|voltage_divider|current_divider|thevenin|norton|energy_cap|energy_ind|charge|complex|real|imag|complex_abs|matrix|mat_zeros|mat_identity|mat_add|mat_sub|mat_mul|mat_scale|mat_transpose|mat_det|mat_trace|mat_get|mat_set|mat_shape|mat_to_array)\\b(?=\\s*\\()"
+    },
+    "function_call_user": {
+      "name": "entity.name.function.mylang",
+      "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()"
+    },
+    "method_call": {
+      "match": "\\.([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()",
+      "captures": {
+        "1": { "name": "entity.name.function.member.mylang" }
+      }
+    },
+    "operator": {
+      "name": "keyword.operator.mylang",
+      "match": "(==|!=|<=|>=|&&|\\|\\||[+\\-*/%<>=!])"
+    },
+    "punctuation": {
+      "patterns": [
+        { "name": "punctuation.section.block.mylang",      "match": "[{}]" },
+        { "name": "punctuation.section.brackets.mylang",   "match": "[\\[\\]]" },
+        { "name": "punctuation.section.parens.mylang",     "match": "[()]" },
+        { "name": "punctuation.separator.comma.mylang",    "match": "," },
+        { "name": "punctuation.terminator.mylang",         "match": ";" },
+        { "name": "punctuation.accessor.dot.mylang",       "match": "\\." },
+        { "name": "punctuation.separator.colon.mylang",    "match": ":" }
+      ]
+    },
+    "identifier": {
+      "name": "variable.other.mylang",
+      "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b"
+    }
+  }
+}

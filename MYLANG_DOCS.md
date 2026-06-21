@@ -1,578 +1,1199 @@
-# PACER: The Interactive Computational Programming Language
-### Complete Language Specification, Library Reference, and Compiler Switch Manual
-*Written for Beginners, Researchers, and System Engineers (Version 2.4.0 Core)*
+# mylang — Complete Language Reference & User Guide
 
----
-
-## Welcome to Pacer!
-
-Pacer is a high-performance, dynamically-typed programming language designed for scientific calculations, electrical engineering simulations, cryptographic proof-of-concepts, spreadsheet parser systems, and dynamic canvas illustrations. 
-
-Pacer compiles code into an **Abstract Syntax Tree (AST)**, runs structural sanitization checks to prevent unsafe register leakage, and executes inside an isolated, sandboxed **Virtual Machine (VM)** context. 
-
-This guide acts as a comprehensive textbook and reference manual to teach you the syntax, functions, modules, compiler targets, and practical real-world automation scripts.
+> **mylang** is a dynamically-typed, interpreted scripting language designed for
+> mathematics, statistics, and electrical engineering, built directly into the
+> **Pacer** code editor.  Files use the `.ml` extension.  Press **F5** inside
+> Pacer to run any `.ml` file instantly — no compilation step, no terminal needed.
 
 ---
 
 ## Table of Contents
-1. [Core Syntax & Primitive Types](#1-core-syntax--primitive-types)
-2. [Control Flow & Iteration Loops](#2-control-flow--iteration-loops)
-3. [Arrays & High-Order Closures](#3-arrays--high-order-closures)
-4. [Hashes & Key-Value Stores](#4-hashes--key-value-stores)
-5. [Special Scientific Data Types](#5-special-scientific-data-types)
-   - [A. Complex Numbers](#a-complex-numbers)
-   - [B. Math Matrices](#b-math-matrices)
-6. [Global Namespace Libraries](#6-global-namespace-libraries)
-   - [`math` Library](#a-the-math-library)
-   - [`stats` Library](#b-the-stats-library)
-   - [`ee` (Electrical Engineering) Library](#c-the-ee-electrical-engineering-library)
-   - [`crypto` Library](#d-the-crypto-security-library)
-   - [`image` (Canvas Vector Drawing) Library](#e-the-image-vector-drawing-library)
-   - [`csv` Parsing Library](#f-the-csv-spreadsheet-library)
-7. [Compiler Target Switches (Deployment Model)](#7-compiler-target-switches-deployment-model)
-8. [Dynamic Tutorials for Beginners](#8-dynamic-tutorials-for-beginners)
+
+1. [Getting Started — Hello World](#1-getting-started)
+2. [Running Code in Pacer](#2-running-code-in-pacer)
+3. [Language Basics](#3-language-basics)
+4. [Control Flow](#4-control-flow)
+5. [Functions](#5-functions)
+6. [Arrays](#6-arrays)
+7. [Hash Maps](#7-hash-maps)
+8. [String Methods](#8-string-methods)
+9. [Math Library](#9-math-library)
+10. [Statistics Library](#10-statistics-library)
+11. [Electrical Engineering Library](#11-electrical-engineering-library)
+12. [Complex Numbers](#12-complex-numbers)
+13. [Matrices](#13-matrices)
+14. [First-Class Functions](#14-first-class-functions)
+15. [Real-World Use Cases](#15-real-world-use-cases)
+16. [Pacer AI Commands](#16-pacer-ai-commands)
+17. [Built-in Quick Reference](#17-built-in-quick-reference)
+18. [Common Errors & Fixes](#18-common-errors--fixes)
 
 ---
 
-## 1. Core Syntax & Primitive Types
+## 1. Getting Started
 
-Pacer is dynamically-typed. You do not need to declare types; variables will automatically accept whatever data is loaded into them. Variable bindings are block-scoped.
+### Hello World
 
-### Declaring Variables: `let`
-Use the `let` keyword to declare or reassign variables:
-```pacer
-let lengthValue = 100;                 // Number (Integer)
-let voltageCoefficient = 12.5e-3;      // Number (Scientific float notation)
-let bannerTitle = "Solenoid RMS Calc"; // String
-let isActiveGrid = true;               // Boolean
-let remoteOffset = null;               // Null reference
+```ml
+print("Hello, World!");
 ```
 
-### Basic Arithmetic and Logic Operators
-Pacer standardizes math and boolean comparisons with consistent operator rules:
-*   **Arithmetic**: `+`, `-`, `*`, `/`, `%` *(Modulo / division remainder)*
-*   **Comparisons**: `==`, `!=`, `<`, `<=`, `>`, `>=`
-*   **Logical Operations**: `&&` *(Logical AND)*, `||` *(Logical OR)*, `!` *(Unary NOT negation)*
-```pacer
-let totalVoltage = 12 + (3 * 4); // 24
-let highPower = totalVoltage > 200 && isActiveGrid; // false
+That's it. No imports, no `main()`, no boilerplate.  Every statement ends with a
+semicolon `;`.  Run it with **F5** in Pacer, or from the terminal:
+
+```bash
+mylang hello.ml
 ```
 
-### String Interpolation and Addition
-Adding a string and a variable automatically casts the variable's value to a string:
-```pacer
-let flowRate = 9.81;
-print("Current system acceleration: " + flowRate + " m/s2");
+### Your second program — variables and maths
+
+```ml
+let name   = "Alice";
+let radius = 5;
+let area   = PI * radius * radius;
+
+print("Hello, " + name + "!");
+print("Circle area: " + str(round(area, 2)));
 ```
 
-### String Built-in Methods
-Strings support extensive processing methods:
-*   `.upper()`: Casts string to UPPERCASE.
-*   `.lower()`: Casts string to lowercase.
-*   `.trim()`: Trims surrounding whitespace.
-*   `.split(separator)`: Splits a string into an Array of substrings. (Defaults to space `" "`).
-*   `.replace(old_str, new_str)`: Replaces substrings.
-*   `.contains(substring)`: Returns `true` if the string contains the target segment.
-*   `.starts_with(prefix)`: Checks leading characters.
-*   `.ends_with(suffix)`: Checks trailing characters.
-*   `.slice(start, end)`: Extracts a substring from clean index ranges.
-*   `.index_of(substring)`: Returns the first matched character index.
+Output:
+```
+Hello, Alice!
+Circle area: 78.54
+```
 
-```pacer
-let rawAddress = "  Pacer-Studio-Platform ";
-let cleaned = rawAddress.trim(); // "Pacer-Studio-Platform"
-let parts = cleaned.split("-");   // ["Pacer", "Studio", "Platform"]
+### Comments
+
+```ml
+// This is a single-line comment
+
+let x = 42;   // inline comment
 ```
 
 ---
 
-## 2. Control Flow & Iteration Loops
+## 2. Running Code in Pacer
 
-Pacer compiles standard structured branch logic and iterative evaluations.
+| Action | How |
+|--------|-----|
+| New `.ml` file | **Ctrl+N** — always opens a mylang file |
+| New file (other type) | **Ctrl+Shift+N** — pick from a list |
+| Run current file | **F5** or type `/run` in the command bar |
+| Save | **Ctrl+S** — auto-appends `.ml` if no extension typed |
+| Save As | **Ctrl+Shift+S** |
+| Open docs | **mylang menu → Open Documentation** |
 
-### The Conditional `if/else` Block
-```pacer
-let temperature = 102.5;
+**Unsaved files** show a `●` dot in the tab name.  The dot clears when you save.
 
-if (temperature > 100.0) {
-  print("⚠️ COOLING COMPRESSOR ACTIVATING: OVER LIMIT!");
-} else if (temperature < 15.0) {
-  print("🔥 HEAT ELEMENTS ACTIVE");
+**Output panel** (bottom-left) shows your program's `print()` output and any
+runtime errors in red.
+
+**AI Assistant panel** (bottom-right) responds to `/` commands:
+
+```
+/run          — execute the current .ml file
+/debug        — ask AI to find bugs in your code
+/fix          — ask AI to repair errors (offers to replace your code)
+/complete     — ask AI to finish your half-written code
+/explain      — ask AI what the code does, step by step
+/mylang <q>   — ask anything about mylang syntax or built-ins
+/help         — list all commands
+```
+
+---
+
+## 3. Language Basics
+
+### Variables
+
+```ml
+let x     = 10;
+let name  = "mylang";
+let flag  = true;
+let empty = null;
+let pi    = 3.14159;
+```
+
+Re-assign any time (no `let` needed):
+
+```ml
+let score = 0;
+score = score + 1;   // score is now 1
+```
+
+### Data Types
+
+| Type | Example | Notes |
+|------|---------|-------|
+| number | `42`, `3.14`, `1e-6` | integers and floats unified |
+| string | `"hello"` | double quotes only |
+| bool | `true`, `false` | |
+| null | `null` | absence of value |
+| array | `[1, 2, 3]` | ordered, mixed types OK |
+| hash | `{"key": value}` | dictionary / map |
+| complex | `complex(3, 4)` | 3+4j |
+| matrix | `matrix([[1,2],[3,4]])` | 2-D numeric matrix |
+| function | `fn(x) { return x*2; }` | first-class value |
+
+Check type at runtime:
+
+```ml
+print(type(42));        // number
+print(type("hi"));      // string
+print(type([1,2,3]));   // array
+print(type(null));      // null
+```
+
+### Operators
+
+```ml
+// Arithmetic
+let a = 10 + 3;    // 13
+let b = 10 - 3;    // 7
+let c = 10 * 3;    // 30
+let d = 10 / 3;    // 3.3333...
+let e = 10 % 3;    // 1  (modulo)
+
+// Comparison  → returns true/false
+10 == 10    // true
+10 != 5     // true
+10 > 5      // true
+10 <= 10    // true
+
+// Logical
+true && false   // false
+true || false   // true
+!true           // false
+
+// String concatenation
+"Hello" + ", " + "World!"   // "Hello, World!"
+"Value: " + str(42)         // "Value: 42"
+```
+
+### Scientific Notation
+
+```ml
+let cap  = 1e-6;    // 0.000001  (1 µF)
+let mega = 1e6;     // 1000000
+let pico = 4.7e-12; // 4.7 pF
+```
+
+---
+
+## 4. Control Flow
+
+### If / Else If / Else
+
+```ml
+let grade = 85;
+
+if (grade >= 90) {
+    print("A");
+} else if (grade >= 80) {
+    print("B");
+} else if (grade >= 70) {
+    print("C");
 } else {
-  print("✅ CORE PARAMETERS STABLE");
+    print("F");
 }
 ```
 
-### The `while` Loop
-Pacer loops sequentially as long as a condition evaluates to `true`:
-```pacer
-let countdown = 5;
-while (countdown > 0) {
-  print("T-Minus: " + countdown);
-  countdown = countdown - 1;
+### While Loop
+
+```ml
+let i = 1;
+while (i <= 5) {
+    print(i);
+    i = i + 1;
+}
+// prints 1 2 3 4 5
+```
+
+### For-In Loop
+
+Iterate over **arrays**, **strings**, **hashes**, or `range()`:
+
+```ml
+// Array
+for (fruit in ["apple", "banana", "cherry"]) {
+    print(fruit);
+}
+
+// String (character by character)
+for (ch in "hello") {
+    print(ch);
+}
+
+// range(stop)
+for (i in range(5)) {
+    print(i);    // 0 1 2 3 4
+}
+
+// range(start, stop)
+for (i in range(2, 8)) {
+    print(i);    // 2 3 4 5 6 7
+}
+
+// range(start, stop, step)
+for (i in range(0, 20, 5)) {
+    print(i);    // 0 5 10 15
+}
+
+// Hash — iterates over keys
+let config = {"host": "localhost", "port": 8080};
+for (key in config) {
+    print(key + " = " + str(config[key]));
 }
 ```
 
-### The List Iteration `for` Loop
-To traverse Arrays, Strings, or Hash Keys directly:
-```pacer
-let outputsList = [1.2, 5.4, 9.8];
-for (item in outputsList) {
-  print("Measured node feedback: " + item);
+### Nested loops — multiplication table
+
+```ml
+for (i in range(1, 4)) {
+    for (j in range(1, 4)) {
+        print(str(i) + " × " + str(j) + " = " + str(i * j));
+    }
 }
 ```
 
 ---
 
-## 3. Arrays & High-Order Closures
+## 5. Functions
 
-Arrays in Pacer store collections of variables and are constructed using brackets `[...]`.
+### Named functions
 
-### Global Array Operations
-*   `len(arr)`: Returns the count of array items.
-*   `push(arr, element)`: Appends an item to the end of the array.
-*   `pop(arr)`: Removes and returns the last element.
+```ml
+fn greet(name) {
+    return "Hello, " + name + "!";
+}
 
-```pacer
-let samples = [5, 10, 15];
-print("Array Size: " + len(samples)); // 3
-push(samples, 20); // samples is now [5, 10, 15, 20]
+print(greet("Alice"));   // Hello, Alice!
+print(greet("Bob"));     // Hello, Bob!
 ```
 
-### Native Array Core Methods
-Instead of using global wrappers, you can call array methods directly on the object:
-*   `arr.len()`: Returns the size.
-*   `arr.push(v)`: Appends value `v` directly.
-*   `arr.pop()`: Returns the tail object.
-*   `arr.contains(v)`: Returns `true` if element `v` is found inside the collection.
-*   `arr.index_of(v)`: Returns item's index, or `-1` if not found.
-*   `arr.join(separator)`: Merges elements into a text string.
-*   `arr.reverse()`: Performs an in-memory reverse sequence array clone.
-*   `arr.slice(start, end)`: Grabs partitioned slices.
+### Multiple parameters
 
-```pacer
-let tags = ["R1", "C2", "L5"];
-if (tags.contains("C2")) {
-  print("Capacitor indexed at: " + tags.index_of("C2")); // 1
+```ml
+fn power_dissipated(voltage, resistance) {
+    return (voltage * voltage) / resistance;
+}
+
+print(power_dissipated(12, 100));   // 1.44  watts
+```
+
+### Default-style pattern (check null)
+
+```ml
+fn greet_with_title(name, title) {
+    if (title == null) {
+        return "Hello, " + name + "!";
+    }
+    return "Hello, " + title + " " + name + "!";
 }
 ```
 
-### High-Order Functional Closures (`map`, `filter`, `reduce`)
-Pacer allows array functional processing using inline callback functions (declarations beginning with `fn`):
+### Recursion
 
-```pacer
-let elements = [1.2, 5.5, -3.1, 4.0, 9.2];
+```ml
+fn factorial(n) {
+    if (n <= 1) { return 1; }
+    return n * factorial(n - 1);
+}
 
-// 1. Filter out absolute negative values
-let positiveNodes = elements.filter(fn(item) { 
-  return item > 0; 
-});
-// result: [1.2, 5.5, 4.0, 9.2]
+print(factorial(10));   // 3628800
+```
 
-// 2. Map & scale remaining positives by 10
-let scaledNodes = positiveNodes.map(fn(item) { 
-  return item * 10.0; 
-});
-// result: [12, 55, 40, 92]
+### Functions returning multiple values via hash
 
-// 3. Sum all scaled objects using reduce
-let sumTotal = scaledNodes.reduce(fn(accumulator, current) {
-  return accumulator + current;
-}, 0.0);
-// result: 199.00
+```ml
+fn stats_summary(data) {
+    return {
+        "mean":   mean(data),
+        "stdev":  stdev(data),
+        "min":    min(data),
+        "max":    max(data)
+    };
+}
+
+let results = stats_summary([4, 8, 15, 16, 23, 42]);
+print("Mean:  " + str(round(results["mean"], 2)));
+print("Stdev: " + str(round(results["stdev"], 2)));
 ```
 
 ---
 
-## 4. Hashes & Key-Value Stores
+## 6. Arrays
 
-Hashes are key-value dictionaries created inside braces `{}`.
+```ml
+let nums = [10, 20, 30, 40, 50];
 
-### Hash Operations
-Keys must be primitive string labels, numbers, or booleans:
-```pacer
-let circuitMap = {
-  "transistor": "NPN",
-  "inductors": 5,
-  "highPass": false
+// Access
+print(nums[0]);         // 10
+print(nums[4]);         // 50
+
+// Modify
+nums[2] = 99;
+print(nums);            // [10, 20, 99, 40, 50]
+
+// Length
+print(len(nums));       // 5
+
+// Add / remove
+push(nums, 60);         // append
+let last = pop(nums);   // remove & return last
+```
+
+### Array methods
+
+```ml
+let data = [3, 1, 4, 1, 5, 9, 2, 6];
+
+print(data.reverse());              // [6, 2, 9, 5, 1, 4, 1, 3]
+print(data.slice(2, 5));            // [4, 1, 5]
+print(data.contains(9));            // true
+print(data.index_of(5));            // 4
+print(data.join(", "));             // "3, 1, 4, 1, 5, 9, 2, 6"
+
+// Functional methods
+let doubled = data.map(fn(x) { return x * 2; });
+let evens   = data.filter(fn(x) { return x % 2 == 0; });
+let total   = data.reduce(fn(acc, x) { return acc + x; }, 0);
+
+print(doubled);   // [6, 2, 8, 2, 10, 18, 4, 12]
+print(evens);     // [4, 2, 6]
+print(total);     // 31
+```
+
+### Building arrays dynamically
+
+```ml
+fn squares_up_to(n) {
+    let result = [];
+    for (i in range(1, n + 1)) {
+        push(result, i * i);
+    }
+    return result;
+}
+
+print(squares_up_to(6));   // [1, 4, 9, 16, 25, 36]
+```
+
+### Nested arrays (2-D grid)
+
+```ml
+let grid = [[1, 2, 3],
+            [4, 5, 6],
+            [7, 8, 9]];
+
+print(grid[1][2]);    // 6  (row 1, col 2)
+grid[0][0] = 99;
+print(grid[0]);       // [99, 2, 3]
+```
+
+---
+
+## 7. Hash Maps
+
+```ml
+let person = {
+    "name":   "Alice",
+    "age":    30,
+    "active": true
 };
 
-// Accessing values
-print("Actives inductors: " + circuitMap["inductors"]); // 5
+// Read
+print(person["name"]);     // Alice
 
-// Setting or changing values
-circuitMap["highPass"] = true;
+// Write / add key
+person["email"] = "alice@example.com";
+person["age"]   = 31;
+
+// Check existence
+print(person.has("email"));   // true
+print(person.has("phone"));   // false
+
+// Delete a key
+person.del("active");
+
+// Iterate
+for (key in person) {
+    print(key + ": " + str(person[key]));
+}
+
+// Keys and values as arrays
+print(person.keys());     // [name, age, email]
+print(person.values());   // [Alice, 31, alice@example.com]
+print(person.len());      // 3
 ```
 
-### Hash Methods Suite
-*   `hash.len()`: Counts key-value pairs.
-*   `hash.keys()`: Returns an Array of all key names.
-*   `hash.values()`: Returns an Array of all element values.
-*   `hash.has(key)`: Returns `true` if the key exists.
-*   `hash.del(key)`: Removes the entry from the hash map.
+### Hash as a record / struct
 
-```pacer
-let testGrid = {"nodeA": 120, "nodeB": 240};
-if (testGrid.has("nodeB")) {
-  testGrid.del("nodeB");
+```ml
+fn make_resistor(value, tolerance, power_rating) {
+    return {
+        "value":        value,
+        "tolerance":    tolerance,
+        "power_rating": power_rating,
+        "label":        str(value) + "Ω ±" + str(tolerance) + "%"
+    };
+}
+
+let r1 = make_resistor(10000, 5, 0.25);
+print(r1["label"]);            // 10000Ω ±5%
+print(r1["power_rating"]);     // 0.25
+```
+
+---
+
+## 8. String Methods
+
+```ml
+let s = "  Hello, World!  ";
+
+print(s.trim());                         // "Hello, World!"
+print(s.trim().upper());                 // "HELLO, WORLD!"
+print(s.trim().lower());                 // "hello, world!"
+print(s.trim().replace("World", "mylang")); // "Hello, mylang!"
+print(s.trim().slice(0, 5));             // "Hello"
+print(s.trim().contains("World"));       // true
+print(s.trim().starts_with("Hello"));    // true
+print(s.trim().ends_with("!"));          // true
+print(s.trim().index_of("World"));       // 7
+
+// Split and join
+let csv  = "1,2,3,4,5";
+let nums = csv.split(",");               // [1, 2, 3, 4, 5]
+let tsv  = nums.join("\t");             // "1\t2\t3\t4\t5"
+
+// String indexing
+let word = "hello";
+print(word[0]);    // "h"
+print(word[4]);    // "o"
+print(len(word));  // 5
+```
+
+---
+
+## 9. Math Library
+
+All functions work both as **top-level** (`sin(x)`) and **namespaced** (`math.sin(x)`).
+
+### Constants
+
+```ml
+print(PI);     // 3.141592653589793
+print(E);      // 2.718281828459045
+print(TAU);    // 6.283185307179586  (2π)
+print(PHI);    // 1.618033988749895  (golden ratio)
+print(INF);    // Infinity
+```
+
+### Core functions
+
+```ml
+// Roots & powers
+sqrt(144)        // 12
+cbrt(27)         // 3
+pow(2, 10)       // 1024
+
+// Rounding
+floor(3.9)       // 3
+ceil(3.1)        // 4
+round(3.14159, 2) // 3.14
+abs(-42)         // 42
+sign(-5)         // -1
+clamp(15, 0, 10) // 10
+
+// Trig (radians)
+sin(PI / 2)      // 1
+cos(0)           // 1
+tan(PI / 4)      // 1
+
+// Degree/radian conversion
+deg(PI)          // 180
+rad(90)          // 1.5707...
+
+// Exponential / logarithm
+exp(1)           // 2.718...  (e^1)
+log(E)           // 1
+log(1000, 10)    // 3
+log2(8)          // 3
+log10(100)       // 2
+```
+
+### Combinatorics
+
+```ml
+factorial(6)     // 720
+comb(10, 3)      // 120   (10 choose 3)
+perm(5, 2)       // 20    (5 permute 2)
+gcd(48, 18)      // 6
+lcm(4, 6)        // 12
+```
+
+### Quadratic solver
+
+```ml
+// x² - 5x + 6 = 0
+let roots = quadratic(1, -5, 6);
+print(roots[0]);    // 3
+print(roots[1]);    // 2
+
+// x² + 1 = 0  →  complex roots
+let c = quadratic(1, 0, 1);
+print(c[0]);        // 0+1j
+print(c[1]);        // 0-1j
+```
+
+### Random numbers
+
+```ml
+rand_seed(42);               // reproducible results
+print(random());             // 0.0–1.0
+print(rand_int(1, 100));     // integer between 1 and 100
+```
+
+---
+
+## 10. Statistics Library
+
+All functions: `stats.fn(args)` or bare `fn(args)`.
+
+```ml
+let data = [12, 15, 14, 10, 18, 14, 16, 13, 11, 15];
+
+// Descriptives
+print(stats.mean(data));        // 13.8
+print(stats.median(data));      // 14
+print(stats.mode(data));        // [14, 15]
+print(stats.stdev(data));       // sample standard deviation
+print(stats.variance(data));    // sample variance
+print(stats.min(data));         // 10
+print(stats.max(data));         // 18
+print(stats.sum(data));         // 138
+print(stats.data_range(data));  // 8
+
+// Rank statistics
+print(stats.percentile(data, 25));   // Q1
+print(stats.percentile(data, 75));   // Q3
+print(stats.quartiles(data));        // [Q1, Q2, Q3]
+
+// Normalisation
+print(stats.zscore(data));       // z-scores (mean=0, std=1)
+print(stats.normalize(data));    // scale to [0, 1]
+
+// Relationships
+let xs = [1, 2, 3, 4, 5];
+let ys = [2.1, 3.9, 6.2, 7.8, 10.1];
+print(stats.correlation(xs, ys));   // ~0.999
+
+let model = stats.linreg(xs, ys);
+print(model["slope"]);              // ~2.0
+print(model["intercept"]);          // ~0.06
+print(model["r2"]);                 // ~0.998
+
+// Normal distribution
+print(stats.normal_pdf(0, 0, 1));   // peak ≈ 0.3989
+print(stats.normal_cdf(1.96, 0, 1));// ≈ 0.975  (95% confidence)
+
+// Histogram
+let h = stats.histogram(data, 5);
+print(h["edges"]);
+print(h["counts"]);
+```
+
+---
+
+## 11. Electrical Engineering Library
+
+All functions: `ee.fn(args)` or bare `fn(args)`.
+
+### Ohm's Law
+
+```ml
+let V = ee.voltage(2, 100);       // V = I × R = 200 V
+let I = ee.current(12, 4);        // I = V / R = 3 A
+let R = ee.resistance(9, 3);      // R = V / I = 3 Ω
+
+// Power
+let P1 = ee.power(12, 2);         // P = V × I = 24 W
+let P2 = ee.power_r(2, 10);       // P = I²R   = 40 W
+let P3 = ee.power_v(10, 50);      // P = V²/R  = 2 W
+```
+
+### Resistor Networks
+
+```ml
+let Rs = ee.series([100, 200, 300]);          // 600 Ω
+let Rp = ee.parallel([100, 100, 100]);        // 33.33 Ω
+
+// Voltage divider
+let vout = ee.voltage_divider(9, 10000, 4700);  // ≈ 2.91 V
+
+// Current divider (fraction through R1)
+let i1 = ee.current_divider(0.1, 1000, 2000);  // A
+```
+
+### Capacitors & Inductors
+
+```ml
+// 10 µF capacitors
+let Cs = ee.cap_series([10e-6, 10e-6]);     // 5 µF
+let Cp = ee.cap_parallel([10e-6, 10e-6]);   // 20 µF
+
+// Inductors
+let Ls = ee.ind_series([1e-3, 2e-3]);       // 3 mH
+let Lp = ee.ind_parallel([4e-3, 4e-3]);     // 2 mH
+```
+
+### Reactance & Impedance
+
+```ml
+let f  = 1000;      // 1 kHz
+
+let Xc = ee.xc(f, 1e-6);     // Xc = 1/(2πfC) = 159.15 Ω
+let Xl = ee.xl(f, 10e-3);    // Xl = 2πfL     = 62.83 Ω
+
+// Full RLC impedance (returns complex number)
+let Z = ee.impedance_rlc(100, f, 10e-3, 1e-6);
+print(Z);                          // complex number
+print(Z.abs());                    // magnitude |Z|
+print(round(Z.angle(), 2));        // phase angle in degrees
+```
+
+### RC / RL Circuits
+
+```ml
+// Time constants
+let tau_rc = ee.rc_tau(1000, 100e-6);   // τ = RC = 0.1 s
+let tau_rl = ee.rl_tau(50e-3, 100);     // τ = L/R = 0.5 ms
+
+// RC charging: V(t) = Vs(1 − e^(−t/τ))
+for (t in [0, 0.05, 0.1, 0.2, 0.5]) {
+    let vc = ee.rc_charge(5.0, t, 1000, 100e-6);
+    print("t=" + str(t) + "s  Vc=" + str(round(vc, 3)) + "V");
+}
+```
+
+### Resonance
+
+```ml
+let f0 = ee.resonant_freq(10e-3, 1e-6);     // f₀ = 1/(2π√LC)
+let Q  = ee.q_factor(f0, 500);              // Q = f₀ / BW
+let BW = ee.bandwidth(f0, 10);              // BW = f₀ / Q
+```
+
+### dB & Signal Level
+
+```ml
+print(ee.to_db(2));            // +6.02 dB   (voltage ratio)
+print(ee.to_db_power(10));     // +10 dB     (power ratio)
+print(ee.from_db(6));          // ≈ 1.995
+print(ee.vrms(340));           // ≈ 240.4 V  (mains peak → RMS)
+print(ee.vpeak(230));          // ≈ 325.3 V  (mains RMS → peak)
+```
+
+### Phasors
+
+```ml
+let V1   = ee.phasor(10, 0);     // 10 V at 0°
+let V2   = ee.phasor(10, 90);    // 10 V at 90°
+let Vsum = ee.complex_add(V1, V2);
+
+print(round(ee.phasor_mag(Vsum), 4));     // 14.1421 V
+print(round(ee.phasor_angle(Vsum), 1));   // 45.0°
+```
+
+### Thevenin / Norton
+
+```ml
+// Given open-circuit voltage 12 V, short-circuit current 0.5 A
+let th = ee.thevenin(12, 0.5);
+print(th["vth"]);    // 12 V
+print(th["rth"]);    // 24 Ω
+
+let no = ee.norton(12, 0.5);
+print(no["in_"]);    // 0.5 A
+print(no["rn"]);     // 24 Ω
+```
+
+### Energy Storage
+
+```ml
+let E_cap = ee.energy_cap(100e-6, 12);   // E = ½CV² = 7.2 mJ
+let E_ind = ee.energy_ind(10e-3, 2);     // E = ½LI² = 20 mJ
+let Q_cap = ee.charge(100e-6, 12);       // Q = CV   = 1.2 mC
+```
+
+### Physical Constants
+
+```ml
+print(ee.EPSILON0);   // 8.854e-12 F/m   (permittivity of free space)
+print(ee.MU0);        // 1.257e-6  H/m   (permeability of free space)
+print(ee.ELECTRON);   // 1.602e-19 C     (elementary charge)
+print(ee.BOLTZMANN);  // 1.381e-23 J/K
+print(ee.PLANCK);     // 6.626e-34 J·s
+print(ee.C_LIGHT);    // 299792458 m/s
+```
+
+---
+
+## 12. Complex Numbers
+
+```ml
+let z1 = complex(3, 4);    // 3 + 4j
+let z2 = complex(1, -2);   // 1 - 2j
+
+// Properties (call as methods)
+print(z1.real());     // 3
+print(z1.imag());     // 4
+print(z1.abs());      // 5.0  (magnitude = √(3²+4²))
+print(z1.angle());    // 53.13°
+print(z1.conj());     // 3 - 4j
+
+// Arithmetic
+let sum  = ee.complex_add(z1, z2);   // 4+2j
+let prod = ee.complex_mul(z1, z2);   // 11-2j
+let quot = ee.complex_div(z1, z2);   // -1+2j
+
+// Check if quadratic roots are complex
+let roots = quadratic(1, 0, 1);      // x²+1=0
+print(type(roots[0]));               // "complex"
+```
+
+---
+
+## 13. Matrices
+
+```ml
+// Create
+let A = matrix([[1, 2, 3],
+                [4, 5, 6],
+                [7, 8, 9]]);
+
+// Utility constructors
+let I = mat_identity(3);    // 3×3 identity
+let Z = mat_zeros(2, 4);    // 2×4 zero matrix
+
+// Access / mutate
+print(mat_get(A, 1, 2));    // 6  (row 1, col 2)
+mat_set(A, 0, 0, 99);
+
+// Arithmetic
+let C = mat_add(A, B);
+let D = mat_mul(A, B);      // matrix multiplication
+let S = mat_scale(A, 2);    // scalar multiplication
+
+// Properties
+print(mat_det(A));           // determinant
+print(mat_trace(A));         // sum of diagonal
+print(mat_transpose(A));     // transpose
+
+// Shape
+let sh = mat_shape(A);
+print(sh["rows"] + " × " + sh["cols"]);
+
+// Method-call style (same results)
+print(A.det());
+print(A.trace());
+print(A.transpose());
+```
+
+### Solve a 2×2 linear system with Cramer's Rule
+
+```ml
+// 2x + y = 5
+// x + 3y = 10
+let coeff = matrix([[2, 1], [1, 3]]);
+let Dx    = matrix([[5, 1], [10, 3]]);
+let Dy    = matrix([[2, 5], [1, 10]]);
+
+let x = mat_det(Dx) / mat_det(coeff);   // 1
+let y = mat_det(Dy) / mat_det(coeff);   // 3
+
+print("x = " + str(x));
+print("y = " + str(y));
+```
+
+---
+
+## 14. First-Class Functions
+
+Functions are values. Store them, pass them, return them.
+
+```ml
+// Store in a variable
+let double = fn(x) { return x * 2; };
+let square = fn(x) { return x * x; };
+
+print(double(5));   // 10
+print(square(5));   // 25
+
+// Pass as argument
+fn apply(f, x) {
+    return f(x);
+}
+print(apply(double, 7));    // 14
+print(apply(square, 7));    // 49
+
+// Return from function (closure)
+fn make_multiplier(factor) {
+    return fn(x) { return x * factor; };
+}
+let times3 = make_multiplier(3);
+let times7 = make_multiplier(7);
+print(times3(10));   // 30
+print(times7(10));   // 70
+
+// Store in array or hash
+let ops = {
+    "add":  fn(a, b) { return a + b; },
+    "sub":  fn(a, b) { return a - b; },
+    "mul":  fn(a, b) { return a * b; }
+};
+print(ops["add"](10, 3));   // 13
+print(ops["mul"](10, 3));   // 30
+```
+
+### Map, Filter, Reduce
+
+```ml
+let nums = range(1, 11);       // [1..10]
+
+let squared  = nums.map(fn(x) { return x * x; });
+let odds     = nums.filter(fn(x) { return x % 2 != 0; });
+let total    = nums.reduce(fn(acc, x) { return acc + x; }, 0);
+
+print(squared);   // [1, 4, 9, 16, 25, 36, 49, 64, 81, 100]
+print(odds);      // [1, 3, 5, 7, 9]
+print(total);     // 55
+
+// Chain
+let result = range(1, 21)
+    .filter(fn(x) { return x % 3 == 0; })
+    .map(fn(x) { return x * x; });
+print(result);    // [9, 36, 81, 144, 225, 324]
+```
+
+---
+
+## 15. Real-World Use Cases
+
+### 15.1 — Grade Calculator
+
+```ml
+fn letter_grade(score) {
+    if (score >= 90) { return "A"; }
+    else if (score >= 80) { return "B"; }
+    else if (score >= 70) { return "C"; }
+    else if (score >= 60) { return "D"; }
+    else { return "F"; }
+}
+
+let scores = [92, 78, 85, 61, 95, 73, 88];
+
+print("=== Grade Report ===");
+print("Mean:   " + str(round(stats.mean(scores), 1)));
+print("Median: " + str(stats.median(scores)));
+print("Stdev:  " + str(round(stats.stdev(scores), 1)));
+print("");
+
+for (s in scores) {
+    print(str(s) + "  →  " + letter_grade(s));
 }
 ```
 
 ---
 
-## 5. Special Scientific Data Types
+### 15.2 — Voltage Divider Network Designer
 
-Pacer features built-in objects designed specifically to run advanced telemetry calculations without loading performance-heavy third-party libraries.
+```ml
+// Design a 3.3 V rail from 5 V using a resistor divider
+let Vin    = 5.0;
+let Vout   = 3.3;
+let R2     = 10000;    // fix R2 at 10 kΩ
+let R1     = R2 * (Vin - Vout) / Vout;
 
-### A. Complex Numbers
-Perfect for phase calculations, frequency sweeps, or electrical wave analysis.
-*   **Creation**: Declared with suffix `j` format or via the `complex(real, imag)` utility function:
-```pacer
-let phas_a = complex(3, 4); // Creates complex number 3+4j
-let phas_b = 3 - 4j;        // Alternative literal declaration format
-```
-*   **Addition and Vector Arithmetics**: Custom arithmetic operations on complex objects recalculate their components automatically.
-```pacer
-let sumComplex = phas_a + phas_b; // Result: 6+0j
-```
-*   **Properties & Core Methods**:
-    *   `obj.real()`: Real coordinate number.
-    *   `obj.imag()`: Imaginary offset multiplier.
-    *   `obj.abs()`: Computes root magnitude $\sqrt{r^2 + i^2}$.
-    *   `obj.conj()`: Conjugates signs (e.g. $3+4j \leftrightarrow 3-4j$).
-    *   `obj.angle()`: Solves Phase angle directly in degrees.
+print("R1 = " + str(round(R1, 0)) + " Ω");
+print("R2 = " + str(R2) + " Ω");
 
-```pacer
-let pNode = complex(10, -10);
-print("Phase Magnitude: " + pNode.abs());   // 14.142136
-print("Phase Angle (Deg): " + pNode.angle()); // -45
+let actual = ee.voltage_divider(Vin, R1, R2);
+print("Actual Vout = " + str(round(actual, 3)) + " V");
+print("Error       = " + str(round((actual - Vout) / Vout * 100, 4)) + "%");
 ```
 
 ---
 
-### B. Math Matrices
-Pacer contains a native Row-major multi-dimensional matrix layout compiler capable of solving complex linear systems.
-*   **Creation**: Wrapped via the `matrix` standard function, or generated automatically as empty configurations:
-```pacer
-// Declaring an explicit 2x2 coordinate space matrix
-let m = matrix([
-  [1.0, 5.0],
-  [0.0, 2.0]
-]);
+### 15.3 — RC Low-Pass Filter Analysis
 
-// Helper constructors
-let zMatrix = mat_zeros(3, 4);    // Formats a 3-row, 4-column matrix containing zeros
-let iMatrix = mat_identity(3);     // Solves a square 3x3 identity matrix with a diagonal of ones
-```
+```ml
+let R  = 1000;     // 1 kΩ
+let C  = 1e-6;     // 1 µF
+let f3 = 1 / (2 * PI * R * C);
 
-*   **Matrix Property Methods**:
-    *   `mat.shape()`: Returns Hash representation of grid counts `{"rows": r, "cols": c}`.
-    *   `mat.get(row, col)`: Accesses specific element value.
-    *   `mat.set(row, col, value)`: Modifies targeted coordinate cell.
-    *   `mat.transpose()`: Rotates cell row values to columns.
-    *   `mat.det()`: Performs recursive matrix cofactor expansion to solve determinant values (requires a square matrix layout).
-    *   `mat.trace()`: Computes trace (sum of diagonal cells).
-    *   `mat.scale(multiplier)`: Scales all entries uniformly.
-    *   `mat.to_array()`: Outputs standard nested Pacer array lists.
+print("Cutoff frequency: " + str(round(f3, 2)) + " Hz");
+print("Time constant:    " + str(ee.rc_tau(R, C) * 1000) + " ms");
+print("");
+print("Frequency response:");
 
-```pacer
-let mCoord = matrix([
-  [2.0, 1.0],
-  [1.0, 3.0]
-]);
-print("Determined volume: " + mCoord.det()); // 5
-```
-
----
-
-## 6. Global Namespace Libraries
-
-Pacer structures specialized functions inside direct namespaces.
-
-### A. The `math` Library
-The standard library `math` provides algebraic constants and trigonometric processing blocks.
-
-#### Constants
-*   `math.PI`: $\pi \approx 3.14159265$
-*   `math.E`: Euler's number $\approx 2.7182818$
-*   `math.TAU`: $2\pi \approx 6.2831853$
-*   `math.PHI`: Golden section ratio $\approx 1.618033$
-*   `math.INF`, `math.NAN`: Infinite bounds and undefined metrics.
-
-#### Core Functions
-*   `math.sqrt(x)`: Square root. If negative, returns a `MylangComplex` object containing imaginary numbers.
-*   `math.pow(x, y)`: Power operation ($x^y$).
-*   `math.abs(x)`: Absolute scale.
-*   `math.floor(x)`, `math.ceil(x)`: Rounds down or up.
-*   `math.round(x, decimals)`: Precision rounding index.
-*   `math.clamp(x, min, max)`: Restricts values within bounds.
-*   `math.sin(x)`, `math.cos(x)`, `math.tan(x)`: Basic trigonometric functions (takes radians).
-*   `math.deg(rad)`, `math.rad(deg)`: Angle conversions.
-*   `math.exp(x)`: Exponential power ($e^x$).
-*   `math.log(x, base)`: Evaluates log output. Defaults to natural log base.
-*   `math.factorial(n)`: Factorial permutations.
-*   `math.comb(n, k)`, `math.perm(n, k)`: Statistical combinations and selections.
-*   `math.gcd(a, b)`, `math.lcm(a, b)`: Greatest Common Divisor and Least Common Multiple.
-*   `math.random()`: Stable pseudo-random decimal selection between $0$ and $1$ (LCG-calculated).
-*   `math.rand_int(min, max)`: Direct integer range randomized result.
-*   `math.quadratic(a, b, c)`: Evaluates roots for $ax^2 + bx + c = 0$. Outputs an array of solved real or complex numbers.
-
-```pacer
-let solvedRoots = math.quadratic(1, -5, 6); // Solves x2 - 5x + 6 = 0
-print("Roots solved: " + solvedRoots);       // [3, 2]
-```
-
----
-
-### B. The `stats` Library
-Perfect for analyzing datasets and regression testing.
-
-#### Core Functions
-*   `stats.mean(arr)`: Computes average.
-*   `stats.median(arr)`: Solves middle values.
-*   `stats.variance(arr)`: Evaluates variance limits.
-*   `stats.stdev(arr)`: Standard deviation.
-*   `stats.normalize(arr)`: Min-Max normalizes a dataset.
-*   `stats.linreg(x_arr, y_arr)`: Solves the linear equation $y = mx + b$. Plots a regression model directly in the Pacer Graphing View.
-*   `stats.histogram(arr, bins)`: Generates frequency counts categorized into bin groups.
-
-```pacer
-let tempLogs = [22, 24, 23, 25, 29, 21, 24];
-print("Avg temperature: " + stats.mean(tempLogs)); // 24
-```
-
----
-
-### C. The `ee` (Electrical Engineering) Library
-Designed specifically to calculate analog circuits, impedance, and filter characteristics.
-
-#### Core Functions
-*   `ee.voltage(i, r)`: Solve potential Ohm difference: $V = I \times R$.
-*   `ee.current(v, r)`: Solve energy current flow: $I = V / R$.
-*   `ee.series(resistors_list)`: Combines series loads: $R_{eq} = R_1 + R_2 + \dots$
-*   `ee.parallel(resistors_list)`: Combines parallel loops: $1/R_{eq} = 1/R_1 + 1/R_2 + \dots$
-*   `ee.resonant_freq(inductance, capacitance)`: Solves resonant threshold: $f_0 = \frac{1}{2\pi\sqrt{LC}}$.
-*   `ee.rc_charge(v0, time, resistance, capacitance)`: Solves time-domain voltage of a capacitor: $v(t) = v_0(1 - e^{-t/RC})$.
-*   `ee.phasor(magnitude, angle_deg)`: Formats angular phasors into complex variables.
-*   `ee.impedance_rlc(r, frequency, l, c)`: Models and plots RLC impedential components.
-
-```pacer
-let filterCap = 10e-6; // 10 microfarads
-let filterInd = 0.22;  // 220 millihenries
-let centerFreq = ee.resonant_freq(filterInd, filterCap);
-print("Resonant f0: " + centerFreq + " Hz"); // 107.29... Hz
-```
-
----
-
-### D. The `crypto` Security Library
-Provides tools to perform integrity checks, protect sensitive parameters, and encrypt datastreams.
-
-#### Core Functions
-*   `crypto.sha256(text)`: Computes standard SHA-256 integrity hash hexadecimal of text string.
-*   `crypto.hmac(msg, key)`: Computes HMAC-SHA256 signature hashes.
-*   `crypto.pbkdf2(password, salt, iterations)`: Validates PBKDF2 password keys with custom iterations.
-*   `crypto.encrypt_aes(cleartext, key)`: Symmetric encryption stream (AES-equivalent hex format).
-*   `crypto.decrypt_aes(hexstream, key)`: Symmetric decryption.
-
-#### Scoped Secure Memory Vault Functionality
-Avoid storing plaintext secrets (Database passwords, API credentials) in global system variables. Pacer secures sensitive data by locking values inside a dedicated secure memory vault:
-*   `crypto.secure_store(key_label, text_secret)`: Encrypts and locks a raw key value inside the local system secure buffer.
-*   `crypto.secure_retrieve(key_label)`: Temporary decryption stream to execute authentication processes.
-*   `crypto.secure_wipe(key_label)`: Active garbage-collection step to sanitize workspace memory caches.
-
-```pacer
-// Enforcing secure vault lifetime
-crypto.secure_store("ApiKey", "PACS-38491-API-KEY");
-let workingCredentials = crypto.secure_retrieve("ApiKey");
-// Execute remote service tasks...
-crypto.secure_wipe("ApiKey"); // Memory cleared! No footprint remaining.
-```
-
----
-
-### E. The `image` Vector Drawing Library
-The `image` library enables developers to create vector graphics, draw coordinates, and display customized interfaces inside the interactive canvas view.
-
-#### Core Functions
-*   `image.blank(width, height, background_hex)`: Initializes an asset workspace with fixed pixel configurations and a background color.
-*   `image.rect(x, y, width, height, fill_color_hex)`: Renders flat rectangles.
-*   `image.circle(cx, cy, radius, fill_color_hex)`: Draws custom circles.
-*   `image.line(x1, y1, x2, y2, stroke_color, stroke_width)`: Draws line segments.
-*   `image.text(message, x, y, size, fill)`: Draws readable labels.
-*   `image.show(title)`: Renders and locks the canvas inside Pacer's Visual Panel tab.
-*   `image.load(url, title)`: Loads remote images into the Visual Panel.
-
-```pacer
-// Generating a clean blueprint overlay
-image.blank(400, 300, "#0d1117");
-image.rect(10, 10, 380, 280, "#161b22");
-image.circle(200, 150, 60, "#58a6ff40");
-image.line(200, 0, 200, 300, "#8b949e", 1);
-image.text("VECTOR COMPASS SCALE", 30, 260, 12, "#3fb950");
-image.show("Dynamic Blueprint");
-```
-
----
-
-### F. The `csv` Spreadsheet Library
-Provides tools to parse raw CSV data or serialize arrays back into CSV.
-
-#### Core Functions
-*   `csv.parse(csv_string)`: Converts raw comma-separated text into a nested array structure.
-*   `csv.stringify(array_of_records)`: Serializes structured tables back into a CSV text string.
-
-```pacer
-let csvPayload = "Transistor,Value\nQ1,NPN\nQ2,PNP";
-let dataGrid = csv.parse(csvPayload);
-print("Read records count: " + len(dataGrid)); // 3 (includes header)
-```
-
----
-
-## 7. Compiler Target Switches (Deployment Model)
-
-Pacer features a dynamic, multiple-target packaging compiler. Depending on your project requirements, you can build your application for different platforms:
-
-### 📱 Android Standalone package (`apk`)
-*   **Compile Switch**: Build profile target `apk`.
-*   **Result**: Compiles source statements to a virtual bytecode layer and wraps them inside an Android runtime shell package.
-
-### 🖥️ Desktop Standalone Client (`exe` / `msi`)
-*   **Compile Switch**: Build profile target `nsis` (generates standard setup `.exe`) or `msi` (enterprise deployment).
-*   **SmartScreen Code Signing**: To bypass Windows SmartScreen warnings on installation, set your code-signing certificate credentials dynamically inside the build terminal before calling packaging:
-    *   **PowerShell Option**:
-        ```powershell
-        $env:CSC_LINK="C:\Certs\developer-key.pfx"
-        $env:CSC_KEY_PASSWORD="SecurePassphraseHex"
-        ```
-
-### 🌐 Web Canvas Engine Deployment (`html`)
-*   **Compile Switch**: Build profile target `html`.
-*   **Result**: Compiles code to execute directly on the web using HTML5 Canvas drawing, perfect for direct integration into standard web app structures.
-
-### 🐍 Python Native Interface script (`pyw`)
-*   **Compile Switch**: Build profile target `pyw`.
-*   **Result**: Produces an offline-first Python Tkinter application of your script that runs locally without complex external dependencies.
-
----
-
-## 8. Dynamic Tutorials for Beginners
-
-Here are three complete, ready-to-run examples to help you practice using Pacer's standard libraries. Copy and paste these directly into your Pacer editor!
-
-### Tutorial 1: IoT Solar Power Budget Governor
-Runs calculated checks on household energy storage, prioritizing solar panel inputs and managing battery levels to avoid drainage.
-
-```pacer
-print("=== SMART HOME RESILIENT ENERGY OPTIMIZER ===");
-
-let solarInput = 1250.5;        // Real-time solar panel inflow (Watts)
-let batteryRemaining = 1450.0;  // Stored reserves capacity (Watt-hours)
-
-// Appliances load list structures
-let appliances = [
-  {"name": "Heat Pump", "load": 950.0, "priority": 1, "status": "active"},
-  {"name": "Kitchen Fridge", "load": 180.0, "priority": 1, "status": "active"},
-  {"name": "Living Room TV", "load": 300.0, "priority": 2, "status": "active"},
-  {"name": "Outdoor Sprinkler", "load": 400.0, "priority": 3, "status": "active"}
-];
-
-// Calculate total active load
-let totalActiveWatts = 0.0;
-for (item in appliances) {
-  if (item["status"] == "active") {
-    totalActiveWatts = totalActiveWatts + item["load"];
-  }
-}
-print("Total Household Power Demand: " + totalActiveWatts + " W");
-print("Net Grid Intake Balance: " + (solarInput - totalActiveWatts) + " W");
-
-// Prevent battery run-down during low solar periods
-if (batteryRemaining < 1500.0) {
-  print("⚠️ LOW STORAGE RESERVES: ENFORCING PRE-EMPTIVE SHUTDOWN ON LOW PRIORITY UNITS!");
-  
-  for (item in appliances) {
-    if (item["priority"] >= 2 && item["status"] == "active") {
-      item["status"] = "disabled";
-      print("  [DISCONNECT] Shifting off appliance load: " + item["name"]);
-    }
-  }
-} else {
-  print("🔋 Standby battery capacity is within nominal parameters.");
+let freqs = [10, 50, 100, 159, 500, 1000, 5000];
+for (f in freqs) {
+    let Xc   = ee.xc(f, C);
+    let Z    = sqrt(R * R + Xc * Xc);
+    let gain = Xc / Z;
+    let db   = ee.to_db(gain);
+    print(str(f) + " Hz → " + str(round(db, 2)) + " dB");
 }
 ```
 
 ---
 
-### Tutorial 2: Secure Master Password Derivation
-Applies modern cryptographic rules (using KDF derivation and HMAC hashing) to safely secure application access, then securely wipes memory layers to prevent credential leaks.
+### 15.4 — RLC Resonance Sweep
 
-```pacer
-print("=== CENTRAL SECURE VAULT ACCESS GATEWAY ===");
+```ml
+let R  = 50;
+let L  = 10e-3;
+let C  = 1e-6;
+let f0 = ee.resonant_freq(L, C);
+let Q  = f0 * L / R;         // Q = ω₀L/R for series circuit
+let BW = ee.bandwidth(f0, Q);
 
-let rawMasterValue = "AdminMasterPassphrase2026!";
-let staticEntropySalt = "sha256_vector_salt_entropy_9329";
-
-// 1. Derive strong PBKDF2 vault key (execute 1,000 hashing rounds)
-let vaultKeyToken = crypto.pbkdf2(rawMasterValue, staticEntropySalt, 1000);
-print("Derivation Token solved successfully.");
-
-// 2. Lock derived token securely inside volatile memory bounds
-crypto.secure_store("active_session_token", vaultKeyToken);
-print("Session Token cached inside protected vault.");
-
-// 3. Retrieve and complete validation tests
-let retrievedToken = crypto.secure_retrieve("active_session_token");
-let hmacVerification = crypto.hmac("LAUNCH_TELEMETRY_PIPELINE", retrievedToken);
-print("System Verification Hash: " + hmacVerification);
-
-// 4. Critical: Explicitly wipe session variables from memory
-crypto.secure_wipe("active_session_token");
-print("Verification complete. Memory sanitized successfully.");
+print("Resonant frequency: " + str(round(f0, 2)) + " Hz");
+print("Q factor:           " + str(round(Q, 2)));
+print("Bandwidth:          " + str(round(BW, 2)) + " Hz");
+print("Lower -3dB:         " + str(round(f0 - BW/2, 2)) + " Hz");
+print("Upper -3dB:         " + str(round(f0 + BW/2, 2)) + " Hz");
 ```
 
 ---
 
-### Tutorial 3: Dynamic Circuit Schematic Illustrator
-Renders an annotated electrical blueprint directly inside the Pacer Graphics Panel.
+### 15.5 — Linear Regression on Sensor Data
 
-```pacer
-// Renders an annotated electrical schematic diagram
-image.blank(500, 300, "#080c10");
+```ml
+// Temperature sensor calibration: raw ADC counts → °C
+let adc_counts = [102, 215, 328, 441, 554, 667, 780];
+let temps_c    = [10,   20,  30,  40,  50,  60,  70];
 
-// Draw outline card
-image.rect(10, 10, 480, 280, "#0d1117");
+let model = stats.linreg(adc_counts, temps_c);
+print("Calibration model:");
+print("  slope:     " + str(round(model["slope"], 6)));
+print("  intercept: " + str(round(model["intercept"], 4)));
+print("  R²:        " + str(round(model["r2"], 6)));
 
-// Draw component connections (R - L - C in series)
-image.line(30, 150, 100, 150, "#58a6ff", 2); // Left input lead
-
-// Resistor symbol (zig-zag points mapped as lines)
-image.line(100, 150, 115, 130, "#3fb950", 2);
-image.line(115, 130, 135, 170, "#3fb950", 2);
-image.line(135, 170, 155, 130, "#3fb950", 2);
-image.line(155, 130, 170, 150, "#3fb950", 2);
-
-image.line(170, 150, 240, 150, "#58a6ff", 1); // Mid connection lead
-
-// Inductor coils
-image.circle(260, 150, 15, "#a371f7");
-image.circle(285, 150, 15, "#a371f7");
-
-image.line(300, 150, 360, 150, "#58a6ff", 1); // Second connection lead
-
-// Capacitor plate 1 and 2
-image.line(360, 120, 360, 180, "#fff", 3);
-image.line(380, 120, 380, 180, "#fff", 3);
-
-image.line(380, 150, 470, 150, "#58a6ff", 2); // Ground output lead
-
-// Text annotations
-image.text("Pacer Circuit Schematic Sim", 25, 25, 14, "#ff7b72");
-image.text("R = 100 Ohm", 95, 80, 11, "#3fb950");
-image.text("L = 220 mH", 240, 80, 11, "#a371f7");
-image.text("C = 10 uF", 350, 80, 11, "#fff");
-
-image.show("Series RLC Blueprint");
-print("Schematic vector loaded successfully into the Graphics tab!");
+// Use the model to convert a new reading
+fn adc_to_temp(adc) {
+    return model["slope"] * adc + model["intercept"];
+}
+print("ADC 500 → " + str(round(adc_to_temp(500), 2)) + " °C");
 ```
+
+---
+
+### 15.6 — Signal Statistics (noise analysis)
+
+```ml
+rand_seed(7);
+
+// Simulate 20 ADC readings with noise
+let readings = [];
+let i = 0;
+while (i < 20) {
+    let noise = (random() - 0.5) * 0.1;   // ±0.05 V noise
+    push(readings, round(3.3 + noise, 4));
+    i = i + 1;
+}
+
+print("Readings: " + str(readings));
+print("Mean:     " + str(round(stats.mean(readings), 4)) + " V");
+print("Stdev:    " + str(round(stats.stdev(readings), 4)) + " V");
+print("SNR:      " + str(round(
+    ee.to_db(stats.mean(readings) / stats.stdev(readings)), 2)) + " dB");
+```
+
+---
+
+### 15.7 — Fibonacci using closures
+
+```ml
+// Generator-style Fibonacci using a closure
+fn make_fib() {
+    let a = 0;
+    let b = 1;
+    return fn() {
+        let val = a;
+        let tmp = a + b;
+        a = b;
+        b = tmp;
+        return val;
+    };
+}
+
+let next = make_fib();
+let sequence = [];
+let i = 0;
+while (i < 12) {
+    push(sequence, next());
+    i = i + 1;
+}
+print(sequence);
+// [0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89]
+```
+
+---
+
+### 15.8 — Matrix: 2-D rotation
+
+```ml
+// Rotate a point (x, y) by angle θ using a rotation matrix
+fn rotation_matrix(theta_deg) {
+    let theta = rad(theta_deg);
+    return matrix([
+        [cos(theta), -sin(theta)],
+        [sin(theta),  cos(theta)]
+    ]);
+}
+
+fn rotate_point(x, y, angle_deg) {
+    let Rm = rotation_matrix(angle_deg);
+    let pt = matrix([[x], [y]]);    // column vector
+    let rp = mat_mul(Rm, pt);
+    return {
+        "x": round(mat_get(rp, 0, 0), 6),
+        "y": round(mat_get(rp, 1, 0), 6)
+    };
+}
+
+let p = rotate_point(1, 0, 90);
+print("Rotated: (" + str(p["x"]) + ", " + str(p["y"]) + ")");
+// Rotated: (0, 1)
+```
+
+---
+
+## 16. Pacer AI Commands
+
+Inside Pacer's command bar (bottom panel):
+
+| Command | What it does |
+|---------|-------------|
+| `/run` | Execute the current `.ml` file — output appears in the Output panel |
+| `/debug` | AI analyses your code and explains every bug |
+| `/fix` | AI repairs errors and offers to replace the file contents |
+| `/complete` | AI finishes your half-written code |
+| `/explain` | AI describes what your code does, step by step |
+| `/mylang how do I use .reduce()?` | Ask any mylang question |
+| `/help` | List all commands |
+
+The AI commands are **mylang-aware** — when working on a `.ml` file the AI
+automatically receives the full language syntax reference, so suggestions will
+always use correct mylang syntax rather than Python or JavaScript idioms.
+
+---
+
+## 17. Built-in Quick Reference
+
+### Global functions
+
+```
+len(x)        type(x)       str(x)        num(x)
+push(arr, v)  pop(arr)      range(n)      range(a,b)    range(a,b,step)
+keys(h)       values(h)     has(h,k)      del(h,k)
+complex(r,i)  real(z)       imag(z)       complex_abs(z)
+matrix(arrs)  mat_zeros(r,c) mat_identity(n)
+mat_add(A,B)  mat_sub(A,B)  mat_mul(A,B)  mat_scale(A,s)
+mat_transpose(A)  mat_det(A)  mat_trace(A)
+mat_get(A,r,c)    mat_set(A,r,c,v)  mat_shape(A)
+```
+
+### math.*  (or bare name)
+
+```
+sqrt  cbrt  pow  abs  floor  ceil  round  sign  clamp
+sin   cos   tan  asin acos  atan  atan2  sinh  cosh  tanh
+deg   rad   exp  log  log2  log10
+factorial  gcd  lcm  comb  perm
+random  rand_int  rand_seed
+quadratic(a,b,c)
+```
+
+### Constants: `PI  E  TAU  PHI  INF  NAN`
+
+### stats.*  (or bare name)
+
+```
+mean  median  mode  stdev  pstdev  variance  pvariance
+min   max     sum   data_range
+percentile(data,p)  quartiles(data)
+correlation(xs,ys)  covariance(xs,ys)  linreg(xs,ys)
+normalize  zscore  histogram(data,bins)
+normal_pdf(x,µ,σ)  normal_cdf(x,µ,σ)
+```
+
+### ee.*  (or bare name)
+
+```
+voltage(i,r)    current(v,r)    resistance(v,i)
+power(v,i)      power_r(i,r)    power_v(v,r)
+series(arr)     parallel(arr)
+cap_series      cap_parallel    ind_series    ind_parallel
+xc(f,c)         xl(f,l)
+impedance_rc(r,f,c)  impedance_rl(r,f,l)  impedance_rlc(r,f,l,c)
+resonant_freq(l,c)   q_factor(f0,bw)      bandwidth(f0,q)
+rc_tau(r,c)     rl_tau(l,r)
+rc_charge(v0,t,r,c)  rc_discharge(v0,t,r,c)
+to_db  to_db_power  from_db  from_db_power  vrms  vpeak
+phasor(mag,deg)  phasor_mag  phasor_angle
+complex_add  complex_mul  complex_div  complex_conj
+voltage_divider(vin,r1,r2)  current_divider(iin,r1,r2)
+thevenin(voc,isc)  norton(voc,isc)
+energy_cap(c,v)  energy_ind(l,i)  charge(c,v)
+```
+
+### EE constants
+
+```
+ee.EPSILON0  ee.MU0  ee.C_LIGHT  ee.PLANCK  ee.BOLTZMANN  ee.ELECTRON
+```
+
+---
+
+## 18. Common Errors & Fixes
+
+| Error message | Cause | Fix |
+|---------------|-------|-----|
+| `ParseError at ';': Expected expression` | Missing value before `;` | Check for empty `let x = ;` |
+| `Undefined variable 'x'` | Used before `let` | Add `let x = ...;` first |
+| `'foo' is not callable` | Called something that isn't a function | Check spelling and that `fn foo` was declared |
+| `Index 5 out of bounds (length 3)` | Array index too large | Use `len(arr)` to guard the index |
+| `Division by zero` | Dividing by `0` | Add a guard: `if (b != 0) { ... }` |
+| `ParseError at '=': Expected '('` | Wrote `fn name =` instead of `fn name(` | Functions need `()` after the name |
+| `stdev() requires at least 2 values` | Only one data point | Pass at least 2 values |
+| `Expected ';' after expression` | Missing semicolon | End every statement with `;` |
+| `LexerError: Unexpected character '@'` | Invalid character | mylang doesn't use `@`, `#`, `$` |
+
+### Formatting rules at a glance
+
+```ml
+// ✓ CORRECT
+let x = 5;
+fn add(a, b) { return a + b; }
+if (x > 0) { print("positive"); }
+for (i in range(10)) { print(i); }
+
+// ✗ WRONG — missing semicolons
+let x = 5          // needs ;
+print("hi")        // needs ;
+
+// ✗ WRONG — missing braces
+if (x > 0) print("positive")     // needs { }
+fn add(a, b) return a + b        // needs { }
+
+// ✗ WRONG — Python-style syntax
+def add(a, b):         // use fn, not def
+    return a + b       // no colons, uses { }
+```
+
+---
+
+*mylang is open and designed to grow. Use `/mylang <question>` inside Pacer
+to get AI help specific to your language at any time.*

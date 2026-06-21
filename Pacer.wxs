@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Pacer.wxs — WiX v5 source defining the Pacer + mylang MSI installer.
+
+  This file is consumed by build_msi.ps1 via `dotnet build Pacer.wixproj`.
+  It does NOT need to be edited by hand for normal rebuilds — build_msi.ps1
+  regenerates the <Files> harvest automatically from the dist/ folder that
+  build_exe.ps1 produces. You only need to touch this file if you want to
+  change the install directory name, shortcuts, or upgrade behavior.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <Package
+      Name="Pacer"
+      Manufacturer="Pacer Project"
+      Version="1.0.0"
+      UpgradeCode="8F2C1A6E-4B3D-4E7A-9C2F-1A6E4B3D7E9C"
+      Scope="perMachine">
+
+    <SummaryInformation
+        Description="Pacer — Code Editor with built-in mylang interpreter"
+        Manufacturer="Pacer Project" />
+
+    <!-- Block installing an older MSI over a newer one; otherwise allow
+         clean upgrades by removing the previous version automatically. -->
+    <MajorUpgrade
+        DowngradeErrorMessage="A newer version of Pacer is already installed. Uninstall it first if you want to downgrade." />
+
+    <!-- Embed everything into a single .msi rather than a separate .cab -->
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Icon shown in Add/Remove Programs and on shortcuts -->
+    <Icon Id="PacerIcon.exe" SourceFile="pacer_logo.ico" />
+    <Property Id="ARPPRODUCTICON" Value="PacerIcon.exe" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+
+    <!-- ── Install directory structure ────────────────────────────────────── -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Pacer" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ProgramMenuPacer" Name="Pacer" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="DesktopFolder" />
+
+    <!-- ── Feature: the application itself ─────────────────────────────────
+         Files uses WiX v5's native glob harvesting (the modern replacement
+         for heat.exe, which WiX's own docs mark as deprecated). Everything
+         in installer/payload/ is picked up automatically: when mylang gains
+         new modules they are already inside Pacer.exe since PyInstaller
+         bundles them via its add data flag at build time, so this payload
+         folder only ever holds the exe, the two doc files, and optionally
+         the mylang-vscode folder. -->
+    <Feature Id="MainApplication" Title="Pacer + mylang" Level="1">
+      <ComponentGroupRef Id="PayloadFiles" />
+      <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="DesktopShortcutComponent" />
+      <ComponentRef Id="UninstallShortcut" />
+    </Feature>
+
+    <ComponentGroup Id="PayloadFiles" Directory="INSTALLFOLDER">
+      <Files Include="payload\**" />
+    </ComponentGroup>
+
+    <!-- ── Shortcuts ─────────────────────────────────────────────────────── -->
+    <DirectoryRef Id="ProgramMenuPacer">
+      <Component Id="StartMenuShortcut" Guid="3B7E2A1C-5D4F-4A8E-9B1C-2A1C5D4F4A8E">
+        <Shortcut Id="StartMenuShortcutEntry"
+                  Name="Pacer"
+                  Description="Code Editor with built-in mylang interpreter"
+                  Target="[INSTALLFOLDER]Pacer.exe"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="PacerIcon.exe" />
+        <RemoveFolder Id="RemoveProgramMenuPacer" On="uninstall" />
+        <RegistryValue Root="HKCU"
+                        Key="Software\PacerProject\Pacer"
+                        Name="StartMenuShortcutInstalled"
+                        Type="integer"
+                        Value="1"
+                        KeyPath="yes" />
+      </Component>
+
+      <Component Id="UninstallShortcut" Guid="6A4D8E1F-2B7C-4D9A-8E3F-7C2B7C4D9A8E">
+        <Shortcut Id="UninstallShortcutEntry"
+                  Name="Uninstall Pacer"
+                  Description="Remove Pacer and mylang from this computer"
+                  Target="[SystemFolder]msiexec.exe"
+                  Arguments="/x [ProductCode]" />
+        <RegistryValue Root="HKCU"
+                        Key="Software\PacerProject\Pacer"
+                        Name="UninstallShortcutInstalled"
+                        Type="integer"
+                        Value="1"
+                        KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <DirectoryRef Id="DesktopFolder">
+      <Component Id="DesktopShortcutComponent" Guid="9E1F4A7C-3D8B-4F2E-A1C6-4A7C3D8B4F2E">
+        <Shortcut Id="DesktopShortcutEntry"
+                  Name="Pacer"
+                  Description="Code Editor with built-in mylang interpreter"
+                  Target="[INSTALLFOLDER]Pacer.exe"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="PacerIcon.exe" />
+        <RegistryValue Root="HKCU"
+                        Key="Software\PacerProject\Pacer"
+                        Name="DesktopShortcutInstalled"
+                        Type="integer"
+                        Value="1"
+                        KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <!-- ── UI: standard install wizard with license/feature pages ─────────── -->
+    <UIRef Id="WixUI_InstallDir" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+
+  </Package>
+</Wix>

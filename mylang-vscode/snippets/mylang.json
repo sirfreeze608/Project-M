@@ -1,0 +1,136 @@
+{
+  "Variable": {
+    "prefix": "let",
+    "body": ["let ${1:name} = ${2:value};"],
+    "description": "Declare a variable"
+  },
+  "Named Function": {
+    "prefix": "fn",
+    "body": ["fn ${1:name}(${2:params}) {", "\t$0", "}"],
+    "description": "Declare a named function"
+  },
+  "Anonymous Function": {
+    "prefix": "afn",
+    "body": ["fn(${1:params}) {", "\t$0", "}"],
+    "description": "Anonymous function expression"
+  },
+  "If": {
+    "prefix": "if",
+    "body": ["if (${1:condition}) {", "\t$0", "}"],
+    "description": "If statement"
+  },
+  "If Else": {
+    "prefix": "ife",
+    "body": ["if (${1:condition}) {", "\t$2", "} else {", "\t$0", "}"],
+    "description": "If / else"
+  },
+  "While": {
+    "prefix": "while",
+    "body": ["while (${1:condition}) {", "\t$0", "}"],
+    "description": "While loop"
+  },
+  "For In": {
+    "prefix": "for",
+    "body": ["for (${1:item} in ${2:iterable}) {", "\t$0", "}"],
+    "description": "For-in loop"
+  },
+  "For Range": {
+    "prefix": "forr",
+    "body": ["for (${1:i} in range(${2:n})) {", "\t$0", "}"],
+    "description": "For loop over range"
+  },
+  "Print": {
+    "prefix": "pr",
+    "body": ["print(${1:value});"],
+    "description": "Print statement"
+  },
+  "Return": {
+    "prefix": "ret",
+    "body": ["return ${1:value};"],
+    "description": "Return statement"
+  },
+  "Array": {
+    "prefix": "arr",
+    "body": ["let ${1:arr} = [${2:elements}];"],
+    "description": "Array literal"
+  },
+  "Hash Map": {
+    "prefix": "hash",
+    "body": ["let ${1:map} = {", "\t\"${2:key}\": ${3:value}", "};"],
+    "description": "Hash map literal"
+  },
+  "Map": {
+    "prefix": "map",
+    "body": ["${1:arr}.map(fn(${2:x}) { return $0; })"],
+    "description": "Array .map()"
+  },
+  "Filter": {
+    "prefix": "filter",
+    "body": ["${1:arr}.filter(fn(${2:x}) { return $0; })"],
+    "description": "Array .filter()"
+  },
+  "Reduce": {
+    "prefix": "reduce",
+    "body": ["${1:arr}.reduce(fn(${2:acc}, ${3:x}) { return $0; }, ${4:init})"],
+    "description": "Array .reduce()"
+  },
+  "Stats Summary": {
+    "prefix": "statsum",
+    "body": [
+      "let ${1:data} = [${2:values}];",
+      "print(\"mean:   \" + str(round(stats.mean(${1:data}), 2)));",
+      "print(\"stdev:  \" + str(round(stats.stdev(${1:data}), 2)));",
+      "print(\"min:    \" + str(stats.min(${1:data})));",
+      "print(\"max:    \" + str(stats.max(${1:data})));"
+    ],
+    "description": "Print stats summary for an array"
+  },
+  "Ohms Law": {
+    "prefix": "ohms",
+    "body": [
+      "let V = ee.voltage(${1:current}, ${2:resistance});",
+      "let I = ee.current(${3:voltage}, ${4:resistance});",
+      "let R = ee.resistance(${5:voltage}, ${6:current});",
+      "let P = ee.power(V, I);"
+    ],
+    "description": "Ohm's law variables"
+  },
+  "RC Circuit": {
+    "prefix": "rc",
+    "body": [
+      "let R = ${1:1000};",
+      "let C = ${2:1e-6};",
+      "let tau = ee.rc_tau(R, C);",
+      "print(\"τ = \" + str(tau) + \" s\");",
+      "print(\"Vc(t) = \" + str(ee.rc_charge(${3:5.0}, ${4:0.1}, R, C)) + \" V\");"
+    ],
+    "description": "RC circuit time constant"
+  },
+  "Linear Regression": {
+    "prefix": "linreg",
+    "body": [
+      "let xs = [${1:x_values}];",
+      "let ys = [${2:y_values}];",
+      "let model = stats.linreg(xs, ys);",
+      "print(\"slope:     \" + str(round(model[\"slope\"], 4)));",
+      "print(\"intercept: \" + str(round(model[\"intercept\"], 4)));",
+      "print(\"r²:        \" + str(round(model[\"r2\"], 4)));"
+    ],
+    "description": "Linear regression"
+  },
+  "Complex Number": {
+    "prefix": "cplx",
+    "body": ["let ${1:z} = complex(${2:real}, ${3:imag});"],
+    "description": "Create a complex number"
+  },
+  "Matrix": {
+    "prefix": "mat",
+    "body": ["let ${1:A} = matrix([", "\t[${2:row1}],", "\t[${3:row2}]", "]);"],
+    "description": "Create a matrix"
+  },
+  "Hello World": {
+    "prefix": "hello",
+    "body": ["print(\"Hello, World!\");"],
+    "description": "Hello World"
+  }
+}

@@ -15,6 +15,26 @@ import random as _random
 import hashlib as _hashlib
 import hmac as _hmac
 import os as _os
+import webbrowser as _webbrowser
+import tempfile as _tempfile
+import datetime as _datetime
+
+# Use the interpreter's own RuntimeError class (not Python's built-in one)
+# so that errors raised anywhere in this file are correctly caught and
+# labeled by main.py / Pacer as mylang RuntimeErrors rather than falling
+# through to the generic InternalError handler.
+def _runtime_error_class():
+    from interpreter import RuntimeError as _MylangRuntimeError
+    return _MylangRuntimeError
+
+class _LazyRuntimeError:
+    """Proxy so `raise RuntimeError(...)` calls throughout this file resolve
+    to interpreter.RuntimeError without needing a top-level circular import
+    or rewriting every call site."""
+    def __new__(cls, *args, **kwargs):
+        return _runtime_error_class()(*args, **kwargs)
+
+RuntimeError = _LazyRuntimeError
 
 # Interpreter runtime types are imported lazily to avoid circular imports.
 # We define the new complex/matrix types here so interpreter.py can import them.
@@ -1233,6 +1253,347 @@ CSV_FUNCTIONS = {
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# ── HTML namespace  (rich output pages — fully opt-in) ────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# This namespace is never touched by any script unless it explicitly calls
+# html.* functions. Scripts that don't reference html.* behave EXACTLY as
+# before — no output mode changes, no files written, no browser windows.
+#
+# Workflow:
+#   html.page("title")        — start a fresh page (clears any prior content)
+#   html.heading("text", 1)   — section heading, level 1-3 (default 2)
+#   html.text("paragraph")    — a paragraph of prose
+#   html.result("Answer", 7)  — a large highlighted "headline result" box
+#   html.kv("label", value)   — a small inline label : value stat row
+#   html.table(headers, rows) — a data table from arrays
+#   html.list([...])          — a bullet list
+#   html.code("let x = 5;")   — a monospace code block
+#   html.divider()            — a thin horizontal rule
+#   html.render(value)        — smart auto-format: pass ANY mylang value
+#                                 (number, string, array, hash, complex,
+#                                 matrix) and it picks a sensible display
+#   html.show(["target"])     — flush the page. target is one or more of:
+#                                 "browser" (default), "file", "panel"
+#                                 e.g. html.show();  html.show(["file"]);
+#                                 html.show(["browser","file","panel"]);
+
+class _HtmlPage:
+    """Accumulates content blocks for one html.* page session."""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.title  = "mylang output"
+        self.blocks: list[str] = []
+
+    def add(self, html_fragment: str):
+        self.blocks.append(html_fragment)
+
+    def render_document(self) -> str:
+        body = "\n".join(self.blocks) if self.blocks else (
+            '<p class="muted">No content was added before html.show() was called.</p>')
+        return _HTML_TEMPLATE.format(title=_html_escape(self.title), body=body)
+
+
+_HTML_PAGE = _HtmlPage()
+
+# Optional hooks Pacer wires up at startup. Both are None when running
+# headless from the terminal, in which case html.show() falls back to
+# writing a file and/or printing a notice — it never crashes either way.
+#   _HTML_PANEL_HOOK:  fn(title: str, full_html_document: str) -> None
+#   _HTML_FILE_DIR_HOOK: fn() -> str   (lets Pacer redirect saved files into
+#                                       a project-relative "output/" folder)
+_HTML_PANEL_HOOK    = None
+_HTML_FILE_DIR_HOOK = None
+
+
+_HTML_TEMPLATE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{title}</title>
+<style>
+  :root {{
+    --bg: #11131a; --panel: #1a1d27; --border: #2a2e42;
+    --text: #f2ebdd; --muted: #7a7f9a; --accent: #e2543c;
+    --teal: #4ec9b0; --mono: 'JetBrains Mono','Fira Code','Courier New',monospace;
+    --sans: -apple-system,'Segoe UI',Inter,sans-serif;
+  }}
+  * {{ box-sizing: border-box; }}
+  body {{
+    background: var(--bg); color: var(--text); font-family: var(--sans);
+    max-width: 760px; margin: 0 auto; padding: 48px 24px 80px; line-height: 1.6;
+  }}
+  h1,h2,h3 {{ font-weight: 600; margin: 28px 0 12px; }}
+  h1 {{ font-size: 26px; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 12px; }}
+  h2 {{ font-size: 20px; color: var(--teal); }}
+  h3 {{ font-size: 16px; color: var(--text); }}
+  p {{ margin: 0 0 14px; font-size: 15px; }}
+  .muted {{ color: var(--muted); font-style: italic; }}
+  .divider {{ height: 1px; background: var(--border); margin: 24px 0; border: none; }}
+  .result-box {{
+    background: rgba(226,84,60,0.12); border: 1px solid rgba(226,84,60,0.35);
+    border-left: 4px solid var(--accent); border-radius: 4px;
+    padding: 18px 20px; margin: 16px 0;
+  }}
+  .result-label {{
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 6px;
+  }}
+  .result-value {{ font-family: var(--mono); font-size: 24px; font-weight: 600; }}
+  .kv-row {{
+    display: flex; justify-content: space-between; padding: 7px 0;
+    border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 14px;
+  }}
+  .kv-row:last-child {{ border-bottom: none; }}
+  .kv-label {{ color: var(--muted); }}
+  .kv-value {{ color: var(--teal); font-weight: 600; }}
+  table {{ width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }}
+  th, td {{ text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); }}
+  th {{ font-family: var(--mono); font-size: 11px; text-transform: uppercase;
+        letter-spacing: 0.06em; color: var(--muted); background: var(--panel); }}
+  td {{ font-family: var(--mono); }}
+  tr:hover td {{ background: rgba(255,255,255,0.02); }}
+  ul.bullet-list {{ margin: 0 0 14px; padding-left: 22px; }}
+  ul.bullet-list li {{ margin-bottom: 6px; font-size: 14px; }}
+  pre.code-block {{
+    background: var(--panel); border: 1px solid var(--border);
+    border-left: 3px solid var(--teal); border-radius: 0 4px 4px 0;
+    padding: 14px 16px; overflow-x: auto; font-family: var(--mono);
+    font-size: 13px; line-height: 1.6; margin: 14px 0;
+  }}
+  .matrix-grid {{ font-family: var(--mono); font-size: 14px; }}
+  .matrix-grid table {{ width: auto; }}
+  .matrix-grid td {{ text-align: right; padding: 4px 14px; border: none; }}
+  .complex-badge {{
+    display: inline-block; font-family: var(--mono); font-size: 15px;
+    background: var(--panel); border: 1px solid var(--border);
+    padding: 4px 12px; border-radius: 4px; color: var(--teal);
+  }}
+  footer {{ margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--border);
+            font-family: var(--mono); font-size: 11px; color: var(--muted); }}
+</style>
+</head>
+<body>
+<h1>{title}</h1>
+{body}
+<footer>Generated by mylang &middot; html.show()</footer>
+</body>
+</html>"""
+
+
+def _html_escape(s) -> str:
+    return (str(s).replace("&", "&amp;").replace("<", "&lt;")
+                  .replace(">", "&gt;").replace('"', "&quot;"))
+
+
+def _html_value_for(v) -> str:
+    """Render any mylang runtime value as an HTML-safe inline string."""
+    from interpreter import MylangArray, MylangHash
+    if isinstance(v, MylangComplex): return f'<span class="complex-badge">{_html_escape(repr(v))}</span>'
+    if isinstance(v, MylangMatrix):  return _html_matrix(v)
+    if isinstance(v, MylangArray):   return _html_escape(repr(v))
+    if isinstance(v, MylangHash):    return _html_escape(repr(v))
+    if v is None:                    return '<span class="muted">null</span>'
+    if isinstance(v, bool):          return "true" if v else "false"
+    return _html_escape(_fmt(v) if isinstance(v, float) else str(v))
+
+
+def _html_matrix(m: "MylangMatrix") -> str:
+    rows_html = "".join(
+        "<tr>" + "".join(f"<td>{_fmt(v)}</td>" for v in row) + "</tr>"
+        for row in m.rows
+    )
+    return f'<div class="matrix-grid"><table>{rows_html}</table></div>'
+
+
+# ── Page-building functions ───────────────────────────────────────────────────
+
+def _html_page(args):
+    title = str(args[0]) if args else "mylang output"
+    _HTML_PAGE.reset()
+    _HTML_PAGE.title = title
+    return None
+
+def _html_heading(args):
+    text  = str(args[0]) if args else ""
+    level = int(args[1]) if len(args) > 1 else 2
+    level = min(max(level, 1), 3)
+    _HTML_PAGE.add(f"<h{level}>{_html_escape(text)}</h{level}>")
+    return None
+
+def _html_text(args):
+    text = str(args[0]) if args else ""
+    _HTML_PAGE.add(f"<p>{_html_escape(text)}</p>")
+    return None
+
+def _html_result(args):
+    label = str(args[0]) if args else "Result"
+    value = args[1] if len(args) > 1 else None
+    _HTML_PAGE.add(
+        f'<div class="result-box">'
+        f'<div class="result-label">{_html_escape(label)}</div>'
+        f'<div class="result-value">{_html_value_for(value)}</div>'
+        f'</div>')
+    return None
+
+def _html_kv(args):
+    label = str(args[0]) if args else ""
+    value = args[1] if len(args) > 1 else None
+    _HTML_PAGE.add(
+        f'<div class="kv-row">'
+        f'<span class="kv-label">{_html_escape(label)}</span>'
+        f'<span class="kv-value">{_html_value_for(value)}</span>'
+        f'</div>')
+    return None
+
+def _html_table(args):
+    from interpreter import MylangArray
+    headers = args[0] if args else None
+    rows    = args[1] if len(args) > 1 else None
+    if not isinstance(headers, MylangArray) or not isinstance(rows, MylangArray):
+        raise RuntimeError("html.table(headers, rows) requires two arrays")
+
+    head_html = "".join(f"<th>{_html_escape(h)}</th>" for h in headers.elements)
+    body_rows = []
+    for row in rows.elements:
+        cells = row.elements if isinstance(row, MylangArray) else [row]
+        body_rows.append(
+            "<tr>" + "".join(f"<td>{_html_value_for(c)}</td>" for c in cells) + "</tr>")
+    _HTML_PAGE.add(
+        f"<table><thead><tr>{head_html}</tr></thead>"
+        f"<tbody>{''.join(body_rows)}</tbody></table>")
+    return None
+
+def _html_list(args):
+    from interpreter import MylangArray
+    items = args[0] if args else None
+    if not isinstance(items, MylangArray):
+        raise RuntimeError("html.list(array) requires an array")
+    items_html = "".join(f"<li>{_html_value_for(i)}</li>" for i in items.elements)
+    _HTML_PAGE.add(f'<ul class="bullet-list">{items_html}</ul>')
+    return None
+
+def _html_code(args):
+    code = str(args[0]) if args else ""
+    _HTML_PAGE.add(f'<pre class="code-block">{_html_escape(code)}</pre>')
+    return None
+
+def _html_divider(args):
+    _HTML_PAGE.add('<hr class="divider">')
+    return None
+
+def _html_render(args):
+    """Smart auto-format: inspect the value's type and pick a sensible block."""
+    from interpreter import MylangArray, MylangHash
+    value = args[0] if args else None
+    label = str(args[1]) if len(args) > 1 else None
+
+    if isinstance(value, MylangMatrix):
+        if label: _HTML_PAGE.add(f"<h3>{_html_escape(label)}</h3>")
+        _HTML_PAGE.add(_html_matrix(value))
+
+    elif isinstance(value, MylangHash):
+        rows_html = "".join(
+            f'<div class="kv-row"><span class="kv-label">{_html_escape(k)}</span>'
+            f'<span class="kv-value">{_html_value_for(v)}</span></div>'
+            for k, v in value.pairs.items())
+        if label: _HTML_PAGE.add(f"<h3>{_html_escape(label)}</h3>")
+        _HTML_PAGE.add(rows_html)
+
+    elif isinstance(value, MylangArray):
+        if label: _HTML_PAGE.add(f"<h3>{_html_escape(label)}</h3>")
+        items_html = "".join(f"<li>{_html_value_for(i)}</li>" for i in value.elements)
+        _HTML_PAGE.add(f'<ul class="bullet-list">{items_html}</ul>')
+
+    elif isinstance(value, MylangComplex):
+        if label:
+            _html_kv([label, value])
+        else:
+            _HTML_PAGE.add(f'<p>{_html_value_for(value)}</p>')
+
+    else:
+        if label:
+            _html_result([label, value])
+        else:
+            _HTML_PAGE.add(f"<p>{_html_value_for(value)}</p>")
+    return None
+
+def _html_show(args):
+    """Flush the accumulated page to one or more targets."""
+    from interpreter import MylangArray
+    targets = ["browser"]
+    if args and isinstance(args[0], MylangArray):
+        targets = [str(t).lower() for t in args[0].elements] or ["browser"]
+    elif args and isinstance(args[0], str):
+        targets = [args[0].lower()]
+
+    document = _HTML_PAGE.render_document()
+    results = []
+
+    if "panel" in targets:
+        if _HTML_PANEL_HOOK:
+            _HTML_PANEL_HOOK(_HTML_PAGE.title, document)
+            results.append("panel")
+        else:
+            print(f"[html.show] 'panel' target requested but no panel hook is registered "
+                  f"(only available inside Pacer).")
+
+    if "file" in targets or "browser" in targets:
+        out_dir = _HTML_FILE_DIR_HOOK() if _HTML_FILE_DIR_HOOK else _tempfile.gettempdir()
+        try:
+            _os.makedirs(out_dir, exist_ok=True)
+        except Exception:
+            out_dir = _tempfile.gettempdir()
+        timestamp = _datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_title = "".join(c if c.isalnum() else "_" for c in _HTML_PAGE.title)[:40] or "output"
+        file_path = _os.path.join(out_dir, f"mylang_{safe_title}_{timestamp}.html")
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(document)
+        results.append(f"file: {file_path}")
+
+        if "browser" in targets:
+            try:
+                _webbrowser.open(f"file://{_os.path.abspath(file_path)}")
+                results.append("browser")
+            except Exception as e:
+                print(f"[html.show] Could not open browser automatically: {e}")
+                print(f"[html.show] Open this file manually: {file_path}")
+
+    if not results:
+        print("[html.show] No valid target. Use \"browser\", \"file\", or \"panel\".")
+    else:
+        print(f"[html.show] Page '{_HTML_PAGE.title}' rendered -> {', '.join(results)}")
+    return None
+
+
+def _html_raw(args):
+    """Inject a raw HTML string directly into the page without escaping.
+    Use with care — content is inserted verbatim. Useful for custom
+    tables, styled blocks, or SVG that html.* building blocks don't cover."""
+    raw = str(args[0]) if args else ""
+    _HTML_PAGE.add(raw)
+    return None
+
+
+HTML_FUNCTIONS = {
+    "page":    (None, _html_page),
+    "heading": (None, _html_heading),
+    "text":    (1,    _html_text),
+    "result":  (None, _html_result),
+    "kv":      (None, _html_kv),
+    "table":   (2,    _html_table),
+    "list":    (1,    _html_list),
+    "code":    (1,    _html_code),
+    "raw":     (1,    _html_raw),
+    "divider": (0,    _html_divider),
+    "render":  (None, _html_render),
+    "show":    (None, _html_show),
+}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # ── register_stdlib(interpreter) ─────────────────────────────────────────────
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -1275,3 +1636,4 @@ def register_stdlib(interp):
     interp.globals.define("crypto", MylangNamespace("crypto", CRYPTO_FUNCTIONS))
     interp.globals.define("image",  MylangNamespace("image",  IMAGE_FUNCTIONS))
     interp.globals.define("csv",    MylangNamespace("csv",    CSV_FUNCTIONS))
+    interp.globals.define("html",   MylangNamespace("html",   HTML_FUNCTIONS))

@@ -1,3 +1,7 @@
+"""
+Pacer + mylang  v0.4.0
+A production-ready code editor for the mylang language.
+"""
 
 import sys
 import os
@@ -5,6 +9,7 @@ import re
 import io
 import json
 import shutil
+import tempfile
 import datetime
 import traceback
 
@@ -22,12 +27,84 @@ from PyQt5.QtGui import (
     QPainter, QTextCursor, QIcon, QKeySequence
 )
 
-# ── Anthropic client ──────────────────────────────────────────────────────────
+# ── LLM provider clients (each is optional — only required if selected) ──────
 try:
     import anthropic as _anthropic
     _ANTHROPIC_AVAILABLE = True
 except ImportError:
     _ANTHROPIC_AVAILABLE = False
+
+try:
+    import openai as _openai
+    _OPENAI_AVAILABLE = True
+except ImportError:
+    _OPENAI_AVAILABLE = False
+
+try:
+    import google.generativeai as _google_genai
+    _GOOGLE_AVAILABLE = True
+except ImportError:
+    _GOOGLE_AVAILABLE = False
+
+# Groq and other OpenAI-compatible providers reuse the openai package's
+# client with a custom base_url, so they share _OPENAI_AVAILABLE.
+
+
+# ── Provider registry ─────────────────────────────────────────────────────────
+# Each provider entry describes how Settings → AI should present it and how
+# AIWorker should call it. Adding a new provider means adding one entry here.
+
+PROVIDERS = {
+    "anthropic": {
+        "label":     "Anthropic (Claude)",
+        "models":    ["claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-opus-4-6"],
+        "env_var":   "ANTHROPIC_API_KEY",
+        "key_field": "api_key_anthropic",
+        "key_hint":  "sk-ant-...",
+        "available": lambda: _ANTHROPIC_AVAILABLE,
+        "pip_name":  "anthropic",
+    },
+    "openai": {
+        "label":     "OpenAI (GPT)",
+        "models":    ["gpt-4.1", "gpt-4.1-mini", "gpt-4o", "o3-mini"],
+        "env_var":   "OPENAI_API_KEY",
+        "key_field": "api_key_openai",
+        "key_hint":  "sk-...",
+        "available": lambda: _OPENAI_AVAILABLE,
+        "pip_name":  "openai",
+    },
+    "google": {
+        "label":     "Google (Gemini)",
+        "models":    ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash"],
+        "env_var":   "GOOGLE_API_KEY",
+        "key_field": "api_key_google",
+        "key_hint":  "AIza...",
+        "available": lambda: _GOOGLE_AVAILABLE,
+        "pip_name":  "google-generativeai",
+    },
+    "groq": {
+        "label":     "Groq",
+        "models":    ["llama-3.3-70b-versatile", "mixtral-8x7b-32768", "gemma2-9b-it"],
+        "env_var":   "GROQ_API_KEY",
+        "key_field": "api_key_groq",
+        "key_hint":  "gsk_...",
+        "available": lambda: _OPENAI_AVAILABLE,   # uses the openai SDK with a custom base_url
+        "pip_name":  "openai",
+        "base_url":  "https://api.groq.com/openai/v1",
+    },
+    "openrouter": {
+        "label":     "OpenRouter (multi-model)",
+        "models":    ["anthropic/claude-sonnet-4.6", "openai/gpt-4.1", "meta-llama/llama-3.3-70b-instruct"],
+        "env_var":   "OPENROUTER_API_KEY",
+        "key_field": "api_key_openrouter",
+        "key_hint":  "sk-or-...",
+        "available": lambda: _OPENAI_AVAILABLE,   # OpenRouter is OpenAI-API-compatible
+        "pip_name":  "openai",
+        "base_url":  "https://openrouter.ai/api/v1",
+    },
+}
+
+PROVIDER_ORDER = ["anthropic", "openai", "google", "groq", "openrouter"]
 
 # ── Import mylang pipeline ────────────────────────────────────────────────────
 _MYLANG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mylang")
@@ -59,23 +136,30 @@ DEFAULTS = {
     "highlight_line":     True,
     "theme":              "dark",
     "accent_color":       "#007ACC",
-    "api_key":            "",
-    "ai_model":           "claude-sonnet-4-6",
-    "ai_max_tokens":      2048,
+    "ai_provider":         "anthropic",
+    "api_key_anthropic":   "",
+    "api_key_openai":      "",
+    "api_key_google":      "",
+    "api_key_groq":        "",
+    "api_key_openrouter":  "",
+    "ai_model":            "claude-sonnet-4-6",
+    "ai_max_tokens":       2048,
     "auto_save_on_run":   True,
     "clear_output_on_run":True,
     "default_save_dir":   "",
+    "last_project_folder":"",
     "auto_backup":        False,
     "backup_interval":    5,
     "backup_dir":         "",
     "keys": {
-        "new_ml":    "Ctrl+N",
-        "new_other": "Ctrl+Shift+N",
-        "open":      "Ctrl+O",
-        "save":      "Ctrl+S",
-        "save_as":   "Ctrl+Shift+S",
-        "run":       "F5",
-        "settings":  "Ctrl+,",
+        "new_ml":     "Ctrl+N",
+        "new_other":  "Ctrl+Shift+N",
+        "open":       "Ctrl+O",
+        "open_folder":"Ctrl+K Ctrl+O",
+        "save":       "Ctrl+S",
+        "save_as":    "Ctrl+Shift+S",
+        "run":        "F5",
+        "settings":   "Ctrl+,",
     },
 }
 
@@ -96,6 +180,11 @@ class Settings:
                         self._data["keys"].update(v)
                     else:
                         self._data[k] = v
+                # Migrate pre-multi-provider configs: a bare "api_key" field
+                # from older Pacer versions held the Anthropic key directly.
+                old_key = saved.get("api_key", "")
+                if old_key and not self._data.get("api_key_anthropic"):
+                    self._data["api_key_anthropic"] = old_key
         except Exception:
             pass
 
@@ -313,31 +402,84 @@ class SettingsDialog(QDialog):
     def _page_ai(self):
         w = QWidget(); v = QVBoxLayout(w); v.setContentsMargins(16,16,16,16)
 
-        g, f = self._group("Anthropic API")
-        self.api_key_edit = self._le(_settings.get("api_key",""), "sk-ant-...", pw=True)
+        g, f = self._group("Provider")
+        provider_labels = [PROVIDERS[p]["label"] for p in PROVIDER_ORDER]
+        current_provider = _settings.get("ai_provider", "anthropic")
+        current_label = PROVIDERS.get(current_provider, PROVIDERS["anthropic"])["label"]
+        self.provider_combo = self._combo(provider_labels, current_label)
+        self.provider_combo.currentIndexChanged.connect(self._on_provider_changed)
+        f.addRow(self._lbl("LLM Provider:"), self.provider_combo)
+
+        self.provider_status_lbl = QLabel("")
+        self.provider_status_lbl.setStyleSheet("color:#888; font-size:11px;")
+        self.provider_status_lbl.setWordWrap(True)
+        f.addRow("", self.provider_status_lbl)
+        v.addWidget(g)
+
+        g2, f2 = self._group("API Key")
+        self.api_key_edit = self._le("", "", pw=True)
         eye = QPushButton("👁"); eye.setFixedWidth(32); eye.setCheckable(True)
         eye.setStyleSheet("background:#444;color:#CCC;border:none;padding:2px;")
         eye.toggled.connect(lambda on: self.api_key_edit.setEchoMode(
             QLineEdit.Normal if on else QLineEdit.Password))
         kr = QHBoxLayout(); kr.addWidget(self.api_key_edit); kr.addWidget(eye)
         kw = QWidget(); kw.setLayout(kr)
-        note = QLabel("Stored in ~/.pacer_settings.json.\n"
-                       "ANTHROPIC_API_KEY env var also works.")
-        note.setStyleSheet("color:#888;font-size:11px;"); note.setWordWrap(True)
-        f.addRow(self._lbl("API Key:"), kw)
-        f.addRow("", note)
-        v.addWidget(g)
+        self.api_key_note_lbl = QLabel("")
+        self.api_key_note_lbl.setStyleSheet("color:#888;font-size:11px;")
+        self.api_key_note_lbl.setWordWrap(True)
+        f2.addRow(self._lbl("API Key:"), kw)
+        f2.addRow("", self.api_key_note_lbl)
+        v.addWidget(g2)
 
-        g2, f2 = self._group("Model")
-        self.model_edit = self._combo([
-            "claude-sonnet-4-6",
-            "claude-haiku-4-5-20251001",
-            "claude-opus-4-6",
-        ], _settings.get("ai_model"))
-        self.max_tokens = self._spin(256, 8192, _settings.get("ai_max_tokens"), " tokens")
-        f2.addRow(self._lbl("Model:"),      self.model_edit)
-        f2.addRow(self._lbl("Max tokens:"), self.max_tokens)
-        v.addWidget(g2); v.addStretch(); return self._scroll(w)
+        g3, f3 = self._group("Model")
+        self.model_edit = self._combo([], "")
+        self.max_tokens = self._spin(256, 32768, _settings.get("ai_max_tokens", 2048), " tokens")
+        f3.addRow(self._lbl("Model:"),      self.model_edit)
+        f3.addRow(self._lbl("Max tokens:"), self.max_tokens)
+        v.addWidget(g3)
+
+        # Populate provider-specific fields for the initially selected provider
+        self._refresh_provider_fields(current_provider)
+
+        v.addStretch(); return self._scroll(w)
+
+    def _on_provider_changed(self, index: int):
+        if index < 0 or index >= len(PROVIDER_ORDER):
+            return
+        provider_key = PROVIDER_ORDER[index]
+        self._refresh_provider_fields(provider_key)
+
+    def _refresh_provider_fields(self, provider_key: str):
+        """Swap the API key field, model list, and status note for the chosen provider."""
+        info = PROVIDERS.get(provider_key, PROVIDERS["anthropic"])
+
+        # API key field — load the key already saved for THIS provider
+        saved_key = _settings.get(info["key_field"], "")
+        self.api_key_edit.setText(saved_key)
+        self.api_key_edit.setPlaceholderText(info["key_hint"])
+        self.api_key_note_lbl.setText(
+            f"Stored in ~/.pacer_settings.json under its own key per provider.\n"
+            f"{info['env_var']} environment variable also works and takes priority.")
+
+        # Model list — repopulate with this provider's models
+        self.model_edit.clear()
+        self.model_edit.addItems(info["models"])
+        saved_model = _settings.get("ai_model", "")
+        idx = self.model_edit.findText(saved_model)
+        self.model_edit.setCurrentIndex(idx if idx >= 0 else 0)
+
+        # Availability status note
+        if info["available"]():
+            self.provider_status_lbl.setText(f"✓ {info['label']} SDK is installed and ready.")
+        else:
+            self.provider_status_lbl.setText(
+                f"⚠ {info['label']} SDK not installed. Run:  pip install {info['pip_name']}")
+
+    def _selected_provider_key(self) -> str:
+        idx = self.provider_combo.currentIndex()
+        if 0 <= idx < len(PROVIDER_ORDER):
+            return PROVIDER_ORDER[idx]
+        return "anthropic"
 
     def _page_run(self):
         w = QWidget(); v = QVBoxLayout(w); v.setContentsMargins(16,16,16,16)
@@ -420,17 +562,22 @@ class SettingsDialog(QDialog):
             l = QLabel(text); l.setStyleSheet(style); v.addWidget(l)
         v.addSpacing(16)
 
+        configured_providers = ", ".join(
+            PROVIDERS[p]["label"] for p in PROVIDER_ORDER if _get_api_key(p)
+        ) or "None configured"
+
         g, f = self._group("System Information")
         base = os.path.dirname(os.path.abspath(__file__))
         for label, value in [
-            ("Python",         sys.version.split()[0]),
-            ("Editor file",    os.path.abspath(__file__)),
-            ("mylang folder",  os.path.join(base, "mylang")),
-            ("Settings file",  SETTINGS_PATH),
-            ("Backup dir",     _settings.get("backup_dir") or "(not set)"),
-            ("API key",        "Set ✓" if (_settings.get("api_key") or
-                               os.environ.get("ANTHROPIC_API_KEY")) else "Not set ✗"),
-            ("mylang engine",  "Available ✓" if MYLANG_AVAILABLE else "NOT FOUND ✗"),
+            ("Python",          sys.version.split()[0]),
+            ("Editor file",     os.path.abspath(__file__)),
+            ("mylang folder",   os.path.join(base, "mylang")),
+            ("Settings file",   SETTINGS_PATH),
+            ("Backup dir",      _settings.get("backup_dir") or "(not set)"),
+            ("Active provider", PROVIDERS.get(_settings.get("ai_provider","anthropic"),
+                                 PROVIDERS["anthropic"])["label"]),
+            ("Configured keys", configured_providers),
+            ("mylang engine",   "Available ✓" if MYLANG_AVAILABLE else "NOT FOUND ✗"),
         ]:
             vl = QLabel(value)
             vl.setStyleSheet("color:#4EC9B0;font-family:Consolas;")
@@ -456,8 +603,11 @@ class SettingsDialog(QDialog):
         _settings.set("highlight_line",     self.hl_line.isChecked())
         _settings.set("theme",              self.theme_combo.currentText())
         _settings.set("accent_color",       self._accent_color)
+        provider_key = self._selected_provider_key()
+        _settings.set("ai_provider", provider_key)
         key = self.api_key_edit.text().strip()
-        if key: _settings.set("api_key", key)
+        if key:
+            _settings.set(PROVIDERS[provider_key]["key_field"], key)
         _settings.set("ai_model",           self.model_edit.currentText())
         _settings.set("ai_max_tokens",      self.max_tokens.value())
         _settings.set("auto_save_on_run",   self.auto_save_run.isChecked())
@@ -517,15 +667,57 @@ class MylangRunner:
 # AI worker thread
 # =============================================================================
 
-_client = None
+_clients: dict = {}   # provider_key → live SDK client instance, built lazily
 
-def _make_client():
-    global _client
-    if not _ANTHROPIC_AVAILABLE:
-        return
-    key = os.environ.get("ANTHROPIC_API_KEY", "") or _settings.get("api_key", "")
-    if key:
-        _client = _anthropic.Anthropic(api_key=key)
+
+def _get_api_key(provider_key: str) -> str:
+    info = PROVIDERS.get(provider_key)
+    if not info:
+        return ""
+    return os.environ.get(info["env_var"], "") or _settings.get(info["key_field"], "")
+
+
+def _build_client(provider_key: str):
+    """Lazily construct and cache an SDK client for the given provider."""
+    info = PROVIDERS.get(provider_key)
+    if not info or not info["available"]():
+        return None
+    key = _get_api_key(provider_key)
+    if not key:
+        return None
+
+    if provider_key == "anthropic":
+        return _anthropic.Anthropic(api_key=key)
+
+    if provider_key == "openai":
+        return _openai.OpenAI(api_key=key)
+
+    if provider_key == "google":
+        _google_genai.configure(api_key=key)
+        return _google_genai   # module itself acts as the "client" for Gemini
+
+    if provider_key in ("groq", "openrouter"):
+        # Both are OpenAI-API-compatible — same SDK, different base_url
+        return _openai.OpenAI(api_key=key, base_url=info["base_url"])
+
+    return None
+
+
+def _make_client(provider_key: str = None):
+    """(Re)build the cached client for one provider, or all configured providers."""
+    global _clients
+    keys = [provider_key] if provider_key else list(PROVIDERS.keys())
+    for pk in keys:
+        client = _build_client(pk)
+        if client is not None:
+            _clients[pk] = client
+        else:
+            _clients.pop(pk, None)
+
+
+def _any_provider_ready() -> bool:
+    return len(_clients) > 0
+
 
 _make_client()
 
@@ -534,31 +726,72 @@ class AIWorker(QThread):
     finished = pyqtSignal(str)
     error    = pyqtSignal(str)
 
-    def __init__(self, prompt: str, model: str, max_tokens: int = 2048):
+    def __init__(self, prompt: str, model: str, max_tokens: int = 2048,
+                 provider: str = None):
         super().__init__()
         self.prompt     = prompt
         self.model      = model
         self.max_tokens = max_tokens
+        self.provider    = provider or _settings.get("ai_provider", "anthropic")
 
     def run(self):
-        if _client is None:
-            self.error.emit(
-                "No API key configured.\n"
-                "Open Settings (Ctrl+,) → AI tab to add your Anthropic API key.")
+        info = PROVIDERS.get(self.provider)
+        if info is None:
+            self.error.emit(f"Unknown provider '{self.provider}'.")
             return
+
+        if not info["available"]():
+            self.error.emit(
+                f"{info['label']} SDK is not installed.\n"
+                f"Run:  pip install {info['pip_name']}")
+            return
+
+        client = _clients.get(self.provider)
+        if client is None:
+            self.error.emit(
+                f"No API key configured for {info['label']}.\n"
+                f"Open Settings (Ctrl+,) → AI tab and select {info['label']} "
+                f"to add its API key, or set {info['env_var']}.")
+            return
+
         try:
-            resp = _client.messages.create(
+            text = self._call_provider(client)
+            if text:
+                self.finished.emit(text)
+            else:
+                self.error.emit("Empty response from API")
+        except Exception as e:
+            self.error.emit(f"{info['label']} API error: {e}")
+
+    def _call_provider(self, client) -> str:
+        if self.provider == "anthropic":
+            resp = client.messages.create(
                 model=self.model,
                 max_tokens=self.max_tokens,
                 messages=[{"role": "user", "content": self.prompt}]
             )
             for block in resp.content:
                 if hasattr(block, "text"):
-                    self.finished.emit(block.text)
-                    return
-            self.error.emit("Empty response from API")
-        except Exception as e:
-            self.error.emit(f"API error: {e}")
+                    return block.text
+            return ""
+
+        if self.provider in ("openai", "groq", "openrouter"):
+            resp = client.chat.completions.create(
+                model=self.model,
+                max_tokens=self.max_tokens,
+                messages=[{"role": "user", "content": self.prompt}]
+            )
+            return resp.choices[0].message.content or ""
+
+        if self.provider == "google":
+            model = client.GenerativeModel(self.model)
+            resp = model.generate_content(
+                self.prompt,
+                generation_config={"max_output_tokens": self.max_tokens}
+            )
+            return resp.text or ""
+
+        return ""
 
 
 # =============================================================================
@@ -893,18 +1126,68 @@ class MainWindow(QMainWindow):
         self.splitter = QSplitter(Qt.Horizontal)
         self.setCentralWidget(self.splitter)
 
+        # File Explorer panel (header + tree)
+        self.explorer_panel = QWidget()
+        explorer_layout = QVBoxLayout(self.explorer_panel)
+        explorer_layout.setContentsMargins(0, 0, 0, 0)
+        explorer_layout.setSpacing(0)
+
+        # Header bar — shows current project folder name + navigation buttons
+        self.explorer_header = QWidget()
+        self.explorer_header.setObjectName("explorerHeader")
+        header_layout = QHBoxLayout(self.explorer_header)
+        header_layout.setContentsMargins(8, 4, 4, 4)
+        header_layout.setSpacing(2)
+
+        self.explorer_label = QLabel("EXPLORER")
+        self.explorer_label.setStyleSheet(
+            "font-weight:bold; font-size:11px; letter-spacing:1px;")
+        header_layout.addWidget(self.explorer_label)
+        header_layout.addStretch()
+
+        up_btn = QPushButton("⬆")
+        up_btn.setFixedSize(22, 22)
+        up_btn.setToolTip("Go to parent folder")
+        up_btn.setStyleSheet("padding:0; font-size:11px;")
+        up_btn.clicked.connect(self._explorer_go_up)
+        header_layout.addWidget(up_btn)
+
+        refresh_btn = QPushButton("⟳")
+        refresh_btn.setFixedSize(22, 22)
+        refresh_btn.setToolTip("Refresh")
+        refresh_btn.setStyleSheet("padding:0; font-size:11px;")
+        refresh_btn.clicked.connect(self._explorer_refresh)
+        header_layout.addWidget(refresh_btn)
+
+        explorer_layout.addWidget(self.explorer_header)
+
+        # Folder path label (shown under the header, truncated if long)
+        self.explorer_path_lbl = QLabel("")
+        self.explorer_path_lbl.setObjectName("explorerPathLabel")
+        self.explorer_path_lbl.setStyleSheet(
+            "font-size:10px; padding:0 8px 4px 8px;")
+        self.explorer_path_lbl.setToolTip("")
+        explorer_layout.addWidget(self.explorer_path_lbl)
+
         # File tree
         self.file_model = QFileSystemModel()
-        self.file_model.setRootPath(QDir.rootPath())
+        self.file_model.setReadOnly(False)
         self.file_tree  = QTreeView()
         self.file_tree.setModel(self.file_model)
-        self.file_tree.setRootIndex(
-            self.file_model.index(QDir.currentPath()))
-        self.file_tree.setMaximumWidth(240)
+        self.file_tree.setMaximumWidth(280)
+        self.file_tree.setMinimumWidth(160)
         self.file_tree.clicked.connect(self.on_file_clicked)
+        self.file_tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.file_tree.customContextMenuRequested.connect(self._explorer_context_menu)
         for col in range(1, 4):
             self.file_tree.hideColumn(col)
-        self.splitter.addWidget(self.file_tree)
+        explorer_layout.addWidget(self.file_tree)
+
+        self.explorer_panel.setMaximumWidth(280)
+        self.splitter.addWidget(self.explorer_panel)
+
+        # NOTE: set_project_folder is called AFTER the status bar is created
+        # (further down in __init__) to avoid AttributeError on self.status.
 
         # Tabs
         self.tab_widget = QTabWidget()
@@ -918,11 +1201,13 @@ class MainWindow(QMainWindow):
         self.create_command_panel()
         self.create_visual_panel()
 
-        # Hook image.show() into the Visual Panel
+        # Hook image.show() and html.show(["panel"]) into the Visual Panel
         import stdlib as _stdlib
-        _stdlib._IMAGE_SHOW_HOOK = self._show_svg
+        _stdlib._IMAGE_SHOW_HOOK    = self._show_svg
+        _stdlib._HTML_PANEL_HOOK    = self._show_html_panel
+        _stdlib._HTML_FILE_DIR_HOOK = self._html_output_dir
 
-        # Status bar
+        # Status bar — must be created BEFORE set_project_folder is called
         self.status = self.statusBar()
         self._cursor_lbl = QLabel("Ln 1, Col 1")
         self._cursor_lbl.setStyleSheet("padding-right:8px;")
@@ -931,6 +1216,12 @@ class MainWindow(QMainWindow):
         self.status.addPermanentWidget(self._lang_lbl)
         self.status.showMessage(
             "Ready  |  F5=Run  Ctrl+,=Settings  /help for commands")
+
+        # Open the last-used project folder now that self.status exists
+        _start_dir = _settings.get("last_project_folder") or QDir.currentPath()
+        if not os.path.isdir(_start_dir):
+            _start_dir = QDir.currentPath()
+        self.set_project_folder(_start_dir)
 
         self.create_menu()
 
@@ -943,9 +1234,9 @@ class MainWindow(QMainWindow):
         if not MYLANG_AVAILABLE:
             self.status.showMessage(
                 "⚠  mylang/ folder not found — place it next to Pacer_mylang.py")
-        elif _client is None:
+        elif not _any_provider_ready():
             self.status.showMessage(
-                "⚠  No API key — open Settings (Ctrl+,) → AI tab to add one")
+                "⚠  No AI provider configured — open Settings (Ctrl+,) → AI tab to add a key")
 
     # ── Theme ─────────────────────────────────────────────────────────────────
 
@@ -958,6 +1249,8 @@ class MainWindow(QMainWindow):
             QTreeView                     {{ background:{t['sidebar']}; color:{t['text']};
                                              border:none; }}
             QTreeView::item:selected      {{ background:{t['select']}; }}
+            #explorerHeader                {{ background:{t['tab_bg']}; }}
+            #explorerPathLabel              {{ color:#888; }}
             QTabWidget::pane              {{ border:1px solid {t['border']}; }}
             QTabBar::tab                  {{ background:{t['tab_bg']}; color:#AAA;
                                              padding:5px 14px; margin-right:2px; }}
@@ -986,7 +1279,6 @@ class MainWindow(QMainWindow):
         """)
 
     def _reload_api_key(self):
-        global _client
         _make_client()
 
     def _apply_settings_to_editors(self):
@@ -1001,11 +1293,7 @@ class MainWindow(QMainWindow):
         self._reload_api_key()
         self._apply_settings_to_editors()
         self._restart_backup_timer()
-        # Sync model combo
-        model = _settings.get("ai_model", "claude-sonnet-4-6")
-        idx = self.model_combo.findText(model)
-        if idx >= 0:
-            self.model_combo.setCurrentIndex(idx)
+        self._refresh_provider_status_btn()
         self.status.showMessage("Settings applied.")
 
     # ── Icon ──────────────────────────────────────────────────────────────────
@@ -1036,9 +1324,10 @@ class MainWindow(QMainWindow):
             fm.addAction(a)
         fm.addSeparator()
         for label, key, slot in [
-            ("Open",    _settings.key("open"),    self.open_file),
-            ("Save",    _settings.key("save"),    self.save_file),
-            ("Save As", _settings.key("save_as"), self.save_file_as),
+            ("Open",         _settings.key("open"),        self.open_file),
+            ("Open Folder…", _settings.key("open_folder"), self.open_folder),
+            ("Save",         _settings.key("save"),        self.save_file),
+            ("Save As",      _settings.key("save_as"),     self.save_file_as),
         ]:
             a = QAction(label, self)
             if key: a.setShortcut(key)
@@ -1149,7 +1438,7 @@ class MainWindow(QMainWindow):
         hdr.addStretch(); hdr.addWidget(cb)
         layout.addLayout(hdr)
 
-        self.output_area = QTextEdit()
+        self.output_area = QPlainTextEdit()
         self.output_area.setReadOnly(True)
         self.output_area.setFont(QFont("Consolas", 10))
         self.output_area.setMaximumHeight(180)
@@ -1170,22 +1459,19 @@ class MainWindow(QMainWindow):
             "/run  /debug  /fix  /complete  /explain  /mylang <q>  /help")
         self.cmd_input.returnPressed.connect(self.execute_command)
 
-        self.model_combo = QComboBox()
-        self.model_combo.addItems([
-            "claude-sonnet-4-6",
-            "claude-haiku-4-5-20251001",
-            "claude-opus-4-6",
-        ])
-        saved_model = _settings.get("ai_model", "claude-sonnet-4-6")
-        idx = self.model_combo.findText(saved_model)
-        if idx >= 0: self.model_combo.setCurrentIndex(idx)
-        self.model_combo.setFixedWidth(230)
+        self.provider_status_btn = QPushButton()
+        self.provider_status_btn.setFixedWidth(230)
+        self.provider_status_btn.setToolTip("Click to change AI provider or model")
+        self.provider_status_btn.setStyleSheet(
+            "text-align:left; padding:4px 8px; background:#3C3C3C; color:#D4D4D4;")
+        self.provider_status_btn.clicked.connect(self.open_settings)
+        self._refresh_provider_status_btn()
 
         run_btn = QPushButton("▶ Run"); run_btn.setFixedWidth(70)
         run_btn.clicked.connect(self.run_current_file)
 
         row.addWidget(self.cmd_input)
-        row.addWidget(self.model_combo)
+        row.addWidget(self.provider_status_btn)
         row.addWidget(run_btn)
         layout.addLayout(row)
 
@@ -1195,6 +1481,14 @@ class MainWindow(QMainWindow):
         self.cmd_output.setMaximumHeight(200)
         layout.addWidget(self.cmd_output)
         self._ai_dock.setWidget(panel)
+
+    def _refresh_provider_status_btn(self):
+        """Update the command-bar button to show the active provider · model."""
+        provider_key = _settings.get("ai_provider", "anthropic")
+        info  = PROVIDERS.get(provider_key, PROVIDERS["anthropic"])
+        model = _settings.get("ai_model", info["models"][0])
+        ready = "●" if _clients.get(provider_key) else "○"
+        self.provider_status_btn.setText(f"{ready} {info['label']} · {model}")
 
     def create_visual_panel(self):
         """SVG canvas panel — shown when image.show() is called from mylang."""
@@ -1248,21 +1542,21 @@ class MainWindow(QMainWindow):
             self._output_dock.hide()
             self._ai_dock.hide()
             self._visual_dock.hide()
-            self.file_tree.show()
+            self.explorer_panel.show()
             self.status.showMessage("Mode: Editor Only")
 
         elif mode == "split":
             self._output_dock.show()
             self._ai_dock.show()
             self._visual_dock.hide()
-            self.file_tree.show()
+            self.explorer_panel.show()
             self.status.showMessage("Mode: Editor + Output")
 
         elif mode == "canvas":
             self._output_dock.show()
             self._ai_dock.hide()
             self._visual_dock.show()
-            self.file_tree.hide()
+            self.explorer_panel.hide()
             self.status.showMessage("Mode: Editor + Visual Canvas")
 
         elif mode == "fullscreen":
@@ -1283,7 +1577,7 @@ class MainWindow(QMainWindow):
         self._visual_dock.setVisible(not self._visual_dock.isVisible())
 
     def _toggle_file_tree(self):
-        self.file_tree.setVisible(not self.file_tree.isVisible())
+        self.explorer_panel.setVisible(not self.explorer_panel.isVisible())
 
     def _zoom(self, direction: int):
         """direction: +1 increase, -1 decrease, 0 reset."""
@@ -1303,6 +1597,25 @@ class MainWindow(QMainWindow):
         self._visual_view.setHtml(
             f'<div style="background:#1e1e1e; padding:8px;">{svg_text}</div>')
         self._visual_dock.show()
+
+    def _show_html_panel(self, title: str, html_document: str):
+        """Called by html.show(["panel"]) to render a full mylang HTML page
+        in the same Visual Panel used by image.show(). Qt's QTextEdit only
+        supports a subset of CSS (no flexbox/grid), so layout is simplified
+        compared to the file/browser output, but content and styling carry
+        over fine for headings, tables, result boxes, and code blocks."""
+        self._visual_title_lbl.setText(f"HTML — {title}")
+        self._visual_view.setHtml(html_document)
+        self._visual_dock.show()
+
+    def _html_output_dir(self) -> str:
+        """Where html.show(["file"]) saves generated pages. Prefers an
+        'output/' folder next to the currently open file's project root,
+        falling back to the system temp directory if no file is open."""
+        root = getattr(self, "_project_root", None)
+        if root and os.path.isdir(root):
+            return os.path.join(root, "output")
+        return tempfile.gettempdir()
 
     def _clear_visual(self):
         self._visual_view.clear()
@@ -1368,6 +1681,164 @@ class MainWindow(QMainWindow):
             self.tab_widget.setTabText(idx, "● " + name)
         elif not modified and cur.startswith("●"):
             self.tab_widget.setTabText(idx, name)
+
+    # ── Folder / Explorer navigation ──────────────────────────────────────────
+
+    def open_folder(self):
+        """File → Open Folder… — switch the Explorer panel to a new project root."""
+        start = _settings.get("last_project_folder") or QDir.currentPath()
+        folder = QFileDialog.getExistingDirectory(
+            self, "Open Folder", start)
+        if folder:
+            self.set_project_folder(folder)
+
+    def set_project_folder(self, folder_path: str):
+        """Point the Explorer tree at folder_path and remember it for next launch."""
+        folder_path = os.path.abspath(folder_path)
+        if not os.path.isdir(folder_path):
+            return
+        self.file_model.setRootPath(folder_path)
+        self.file_tree.setRootIndex(self.file_model.index(folder_path))
+        self._project_root = folder_path
+
+        # Header label shows just the folder name, uppercased, VS-Code style
+        name = os.path.basename(folder_path.rstrip(os.sep)) or folder_path
+        self.explorer_label.setText(name.upper())
+        self.explorer_path_lbl.setText(self._shorten_path(folder_path))
+        self.explorer_path_lbl.setToolTip(folder_path)
+
+        _settings.set("last_project_folder", folder_path)
+        _settings.save()
+        if hasattr(self, "status"):
+            self.status.showMessage(f"Project folder: {folder_path}")
+
+    def _shorten_path(self, path: str, max_len: int = 38) -> str:
+        if len(path) <= max_len:
+            return path
+        return "…" + path[-(max_len - 1):]
+
+    def _explorer_go_up(self):
+        """Navigate the Explorer root up one directory level."""
+        current = getattr(self, "_project_root", QDir.currentPath())
+        parent = os.path.dirname(current.rstrip(os.sep))
+        if parent and os.path.isdir(parent) and parent != current:
+            self.set_project_folder(parent)
+
+    def _explorer_refresh(self):
+        """Force the file system model to re-read the current folder."""
+        current = getattr(self, "_project_root", QDir.currentPath())
+        # Re-setting the root path forces QFileSystemModel to refresh
+        self.file_model.setRootPath("")
+        self.file_model.setRootPath(current)
+        self.file_tree.setRootIndex(self.file_model.index(current))
+        self.status.showMessage("Explorer refreshed.")
+
+    def _explorer_context_menu(self, pos):
+        """Right-click menu in the Explorer tree: open, reveal, new file/folder."""
+        index = self.file_tree.indexAt(pos)
+        menu_parent = self.file_tree
+
+        from PyQt5.QtWidgets import QMenu
+        menu = QMenu(menu_parent)
+
+        if index.isValid():
+            path = self.file_model.filePath(index)
+            is_dir = os.path.isdir(path)
+
+            if not is_dir:
+                open_a = menu.addAction("Open")
+                open_a.triggered.connect(lambda: self.load_file(path))
+            else:
+                set_root_a = menu.addAction("Set as Project Folder")
+                set_root_a.triggered.connect(lambda: self.set_project_folder(path))
+
+            menu.addSeparator()
+            reveal_a = menu.addAction("Reveal in File Explorer")
+            reveal_a.triggered.connect(lambda: self._reveal_in_os(path))
+
+            rename_a = menu.addAction("Rename")
+            rename_a.triggered.connect(lambda: self.file_tree.edit(index))
+
+            delete_a = menu.addAction("Delete")
+            delete_a.triggered.connect(lambda: self._delete_path(path))
+
+            menu.addSeparator()
+
+        new_file_a = menu.addAction("New mylang File Here…")
+        new_file_a.triggered.connect(lambda: self._new_file_in_explorer(index))
+
+        new_folder_a = menu.addAction("New Folder…")
+        new_folder_a.triggered.connect(lambda: self._new_folder_in_explorer(index))
+
+        menu.exec_(self.file_tree.viewport().mapToGlobal(pos))
+
+    def _reveal_in_os(self, path: str):
+        folder = path if os.path.isdir(path) else os.path.dirname(path)
+        try:
+            if sys.platform.startswith("win"):
+                os.startfile(folder)
+            elif sys.platform == "darwin":
+                import subprocess; subprocess.Popen(["open", folder])
+            else:
+                import subprocess; subprocess.Popen(["xdg-open", folder])
+        except Exception as e:
+            self._append_output(f"Could not open file manager: {e}", "#CE9178")
+
+    def _delete_path(self, path: str):
+        name = os.path.basename(path)
+        reply = QMessageBox.question(
+            self, "Delete",
+            f"Delete '{name}'? This cannot be undone.",
+            QMessageBox.Yes | QMessageBox.No)
+        if reply != QMessageBox.Yes:
+            return
+        try:
+            if os.path.isdir(path):
+                shutil.rmtree(path)
+            else:
+                os.remove(path)
+            self.status.showMessage(f"Deleted: {path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Could not delete:\n{e}")
+
+    def _new_file_in_explorer(self, index):
+        target_dir = self._dir_for_index(index)
+        name, ok = QInputDialog.getText(
+            self, "New File", "File name:", text="untitled.ml")
+        if not ok or not name.strip():
+            return
+        if not os.path.splitext(name)[1]:
+            name += ".ml"
+        full_path = os.path.join(target_dir, name)
+        if os.path.exists(full_path):
+            QMessageBox.warning(self, "Exists", "A file with that name already exists.")
+            return
+        try:
+            with open(full_path, "w", encoding="utf-8") as f:
+                if name.endswith(".ml"):
+                    f.write('print("Hello, World!");\n')
+            self.load_file(full_path)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Could not create file:\n{e}")
+
+    def _new_folder_in_explorer(self, index):
+        target_dir = self._dir_for_index(index)
+        name, ok = QInputDialog.getText(self, "New Folder", "Folder name:")
+        if not ok or not name.strip():
+            return
+        full_path = os.path.join(target_dir, name)
+        try:
+            os.makedirs(full_path, exist_ok=False)
+        except FileExistsError:
+            QMessageBox.warning(self, "Exists", "A folder with that name already exists.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Could not create folder:\n{e}")
+
+    def _dir_for_index(self, index) -> str:
+        if not index.isValid():
+            return getattr(self, "_project_root", QDir.currentPath())
+        path = self.file_model.filePath(index)
+        return path if os.path.isdir(path) else os.path.dirname(path)
 
     def open_file(self):
         path, _ = QFileDialog.getOpenFileName(
@@ -1604,9 +2075,10 @@ class MainWindow(QMainWindow):
         }
 
         self._append_output(f"⏳ Asking AI ({action})…", "#DCDCAA")
-        model  = self.model_combo.currentText()
-        tokens = _settings.get("ai_max_tokens", 2048)
-        worker = AIWorker(prompts[action], model, tokens)
+        provider = _settings.get("ai_provider", "anthropic")
+        model    = _settings.get("ai_model", PROVIDERS[provider]["models"][0])
+        tokens   = _settings.get("ai_max_tokens", 2048)
+        worker = AIWorker(prompts[action], model, tokens, provider=provider)
         worker.finished.connect(lambda t: self._on_ai_done(action, t, ctx))
         worker.error.connect(lambda e: self._append_output(f"AI error: {e}", "#F44747"))
         worker.finished.connect(lambda _: self._safe_remove_worker(worker))
@@ -1626,9 +2098,10 @@ class MainWindow(QMainWindow):
             "if(c){} else{} [1,2,3] {\"k\":v} complex(3,4) matrix([[1,2]])\n"
             + self.BUILTINS_HELP + "\n\nQuestion: " + question)
         self._append_output("⏳ Asking AI about mylang…", "#DCDCAA")
-        model  = self.model_combo.currentText()
-        tokens = _settings.get("ai_max_tokens", 2048)
-        worker = AIWorker(prompt, model, tokens)
+        provider = _settings.get("ai_provider", "anthropic")
+        model    = _settings.get("ai_model", PROVIDERS[provider]["models"][0])
+        tokens   = _settings.get("ai_max_tokens", 2048)
+        worker = AIWorker(prompt, model, tokens, provider=provider)
         worker.finished.connect(lambda t: self._append_output(t, "#D4D4D4"))
         worker.error.connect(lambda e: self._append_output(f"AI error: {e}", "#F44747"))
         worker.finished.connect(lambda _: self._safe_remove_worker(worker))
