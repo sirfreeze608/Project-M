@@ -13,7 +13,7 @@
   <Package
       Name="Pacer"
       Manufacturer="Pacer Project"
-      Version="1.0.0"
+      Version="0.5.1"
       UpgradeCode="8F2C1A6E-4B3D-4E7A-9C2F-1A6E4B3D7E9C"
       Scope="perMachine">
 

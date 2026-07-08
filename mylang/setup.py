@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name             = "mylang",
-    version          = "0.4.0",
+    version          = "0.5.1",
     description      = "A custom interpreted language for maths, stats, and EE",
     py_modules       = ["main", "lexer", "parser", "interpreter",
                         "ast_nodes", "stdlib"],

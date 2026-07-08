@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Pacer + mylang  v0.4.0  —  macOS / Linux installer
+# Pacer + mylang  v0.5.1  —  macOS / Linux installer
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo ""
 echo "============================================"
-echo "  Pacer + mylang  v0.4.0  |  Unix Setup"
+echo "  Pacer + mylang  v0.5.1  |  Unix Setup"
 echo "============================================"
 echo ""
 

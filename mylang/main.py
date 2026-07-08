@@ -24,7 +24,7 @@ from parser      import Parser, ParseError
 from interpreter import Interpreter, RuntimeError as MylangRuntimeError
 from ast_nodes   import *
 
-__version__ = "0.4.0"
+__version__ = "0.5.1"
 
 
 # ── AST pretty-printer ────────────────────────────────────────────────────────

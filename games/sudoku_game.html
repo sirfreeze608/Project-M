@@ -1,0 +1,1394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sudoku · Pacer</title>
+<style>
+/* ── Design tokens ────────────────────────────────────────────────────────── */
+:root {
+  --bg:         #0F1117;
+  --surface:    #1A1D27;
+  --surface2:   #21253A;
+  --border:     #2A2E42;
+  --accent:     #E2543C;
+  --accent-dim: rgba(226,84,60,0.15);
+  --teal:       #4EC9B0;
+  --teal-dim:   rgba(78,201,176,0.12);
+  --parchment:  #F2EBDD;
+  --muted:      #7A7F9A;
+  --green:      #6A9955;
+  --amber:      #CE9178;
+  --mono:       'JetBrains Mono','Fira Code','Cascadia Code','Courier New',monospace;
+  --sans:       'Inter',-apple-system,'Segoe UI',sans-serif;
+  --radius:     3px;
+}
+
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html { height:100%; }
+
+body {
+  background:var(--bg);
+  color:var(--parchment);
+  font-family:var(--sans);
+  font-size:14px;
+  line-height:1.5;
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+.site-header {
+  width:100%;
+  max-width:900px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:18px 24px;
+  border-bottom:1px solid var(--border);
+}
+
+.logo {
+  font-family:var(--mono);
+  font-size:14px;
+  color:var(--teal);
+  letter-spacing:0.08em;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.logo-dot { color:var(--accent); }
+
+.header-right { display:flex; align-items:center; gap:12px; }
+
+.user-badge {
+  display:flex; align-items:center; gap:8px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:6px 12px;
+  font-family:var(--mono);
+  font-size:12px;
+  cursor:pointer;
+  transition:border-color 0.15s;
+}
+.user-badge:hover { border-color:var(--teal); }
+.user-avatar {
+  width:22px; height:22px; border-radius:50%;
+  background:linear-gradient(135deg,var(--accent),var(--teal));
+  display:flex; align-items:center; justify-content:center;
+  font-size:10px; font-weight:700; color:#111; flex-shrink:0;
+}
+.user-name { color:var(--parchment); }
+
+.sign-in-btn {
+  background:var(--accent); border:none; color:#1a0a07;
+  font-family:var(--mono); font-size:12px; font-weight:700;
+  padding:7px 16px; border-radius:var(--radius); cursor:pointer;
+  transition:background 0.15s;
+}
+.sign-in-btn:hover { background:#ee6b53; }
+
+/* ── Main layout ─────────────────────────────────────────────────────────── */
+.game-wrapper {
+  width:100%; max-width:900px;
+  padding:28px 24px 48px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:24px;
+}
+
+.game-title {
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:0.16em;
+  text-transform:uppercase;
+  color:var(--muted);
+  align-self:flex-start;
+}
+
+.game-layout {
+  display:flex;
+  gap:28px;
+  align-items:flex-start;
+  flex-wrap:wrap;
+  justify-content:center;
+}
+
+/* ── Difficulty strip ─────────────────────────────────────────────────────── */
+.difficulty-strip {
+  display:flex;
+  gap:4px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:4px;
+  align-self:flex-start;
+}
+
+.diff-btn {
+  font-family:var(--mono);
+  font-size:11px;
+  font-weight:600;
+  letter-spacing:0.06em;
+  text-transform:uppercase;
+  padding:6px 14px;
+  border:none;
+  border-radius:2px;
+  cursor:pointer;
+  transition:all 0.15s;
+  background:transparent;
+  color:var(--muted);
+}
+.diff-btn:hover { color:var(--parchment); background:var(--surface2); }
+.diff-btn.active { background:var(--accent); color:#1a0a07; }
+.diff-btn.locked { opacity:0.4; cursor:not-allowed; }
+.diff-btn.locked::after { content:" 🔒"; font-size:9px; }
+
+/* ── Timer + stats ───────────────────────────────────────────────────────── */
+.game-meta {
+  display:flex;
+  gap:16px;
+  align-items:center;
+  align-self:flex-start;
+}
+
+.meta-item {
+  font-family:var(--mono);
+  font-size:12px;
+  color:var(--muted);
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.meta-value {
+  color:var(--parchment);
+  font-weight:600;
+  font-variant-numeric:tabular-nums;
+}
+.timer-digits { font-size:16px; letter-spacing:0.05em; }
+.timer-anim { animation:timerTick 1s ease-in-out infinite; }
+
+@keyframes timerTick {
+  0%,100% { opacity:1; }
+  50%      { opacity:0.6; }
+}
+
+/* ── Sudoku grid ──────────────────────────────────────────────────────────── */
+.grid-wrap {
+  position:relative;
+  flex-shrink:0;
+}
+
+.sudoku-grid {
+  display:grid;
+  grid-template-columns:repeat(9,1fr);
+  border:2px solid var(--parchment);
+  border-radius:var(--radius);
+  overflow:hidden;
+  gap:0;
+  user-select:none;
+  box-shadow:0 0 0 1px var(--border);
+}
+
+.cell {
+  width:52px; height:52px;
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--mono);
+  font-size:20px;
+  font-weight:500;
+  cursor:pointer;
+  position:relative;
+  transition:background 0.1s;
+  border:1px solid var(--border);
+  background:var(--surface);
+  color:var(--parchment);
+}
+
+/* Box borders */
+.cell:nth-child(3n)   { border-right-color:var(--parchment); border-right-width:2px; }
+.cell:nth-child(9n)   { border-right:none; }
+.cell[data-row="2"] , .cell[data-row="5"] { border-bottom:2px solid var(--parchment); }
+
+.cell.given  { color:var(--teal); background:var(--teal-dim); font-weight:700; }
+.cell.selected { background:rgba(226,84,60,0.18) !important; box-shadow:inset 0 0 0 2px var(--accent); }
+.cell.highlight { background:rgba(78,201,176,0.08); }
+.cell.error  { color:var(--accent) !important; background:var(--accent-dim) !important; }
+.cell.correct-flash { animation:correctFlash 0.4s ease forwards; }
+.cell.shake  { animation:shake 0.35s ease; }
+.cell.win-wave { animation:winWave 0.6s ease forwards; }
+
+.cell-notes {
+  display:grid; grid-template-columns:repeat(3,1fr);
+  gap:0; width:100%; height:100%;
+  padding:2px;
+}
+.cell-note {
+  font-size:8px; font-family:var(--mono);
+  display:flex; align-items:center; justify-content:center;
+  color:var(--muted);
+  line-height:1;
+}
+
+@keyframes correctFlash {
+  0%   { background:rgba(106,153,85,0.4); transform:scale(1.06); }
+  60%  { background:rgba(106,153,85,0.2); transform:scale(1.02); }
+  100% { background:var(--surface); transform:scale(1); }
+}
+@keyframes shake {
+  0%,100% { transform:translateX(0); }
+  20%  { transform:translateX(-5px); }
+  40%  { transform:translateX(5px); }
+  60%  { transform:translateX(-4px); }
+  80%  { transform:translateX(3px); }
+}
+@keyframes winWave {
+  0%   { background:var(--surface); }
+  30%  { background:rgba(78,201,176,0.4); transform:scale(1.05); }
+  60%  { background:rgba(226,84,60,0.3); }
+  100% { background:rgba(78,201,176,0.15); }
+}
+
+/* ── Right panel ──────────────────────────────────────────────────────────── */
+.control-panel {
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  min-width:180px;
+  max-width:220px;
+}
+
+.panel-section {
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:14px;
+}
+.panel-label {
+  font-family:var(--mono);
+  font-size:10px;
+  letter-spacing:0.12em;
+  text-transform:uppercase;
+  color:var(--accent);
+  margin-bottom:10px;
+}
+
+/* Numpad */
+.numpad {
+  display:grid; grid-template-columns:repeat(3,1fr);
+  gap:6px;
+}
+.num-btn {
+  background:var(--surface2);
+  border:1px solid var(--border);
+  color:var(--parchment);
+  font-family:var(--mono);
+  font-size:18px;
+  font-weight:600;
+  height:46px;
+  border-radius:var(--radius);
+  cursor:pointer;
+  transition:all 0.12s;
+  display:flex; align-items:center; justify-content:center;
+  position:relative;
+}
+.num-btn:hover { border-color:var(--teal); color:var(--teal); background:var(--teal-dim); }
+.num-btn.used { opacity:0.35; }
+.num-count {
+  position:absolute; top:3px; right:5px;
+  font-size:8px; color:var(--muted); font-weight:400;
+}
+
+/* Action buttons */
+.action-btns { display:flex; flex-direction:column; gap:6px; }
+.action-btn {
+  background:var(--surface2);
+  border:1px solid var(--border);
+  color:var(--parchment);
+  font-family:var(--mono);
+  font-size:12px;
+  padding:9px 14px;
+  border-radius:var(--radius);
+  cursor:pointer;
+  text-align:left;
+  transition:all 0.12s;
+  display:flex; align-items:center; gap:8px;
+}
+.action-btn:hover { border-color:var(--teal); color:var(--teal); }
+.action-btn.danger:hover { border-color:var(--accent); color:var(--accent); }
+.action-btn .btn-icon { font-size:14px; }
+.action-btn.note-active { border-color:var(--amber); color:var(--amber); background:rgba(206,145,120,0.1); }
+
+/* Stats */
+.stat-row {
+  display:flex; justify-content:space-between;
+  font-size:12px; padding:4px 0;
+  border-bottom:1px solid var(--border);
+}
+.stat-row:last-child { border-bottom:none; }
+.stat-label { color:var(--muted); }
+.stat-val { font-family:var(--mono); color:var(--parchment); }
+
+/* ── Sign-in modal ───────────────────────────────────────────────────────── */
+.modal-backdrop {
+  position:fixed; inset:0;
+  background:rgba(15,17,23,0.85);
+  backdrop-filter:blur(4px);
+  display:flex; align-items:center; justify-content:center;
+  z-index:1000;
+  animation:fadeIn 0.2s ease;
+}
+.modal-backdrop.hidden { display:none; }
+
+@keyframes fadeIn {
+  from { opacity:0; }
+  to   { opacity:1; }
+}
+
+.modal {
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:4px;
+  padding:32px;
+  width:100%; max-width:380px;
+  position:relative;
+  animation:slideUp 0.25s ease;
+}
+@keyframes slideUp {
+  from { transform:translateY(16px); opacity:0; }
+  to   { transform:translateY(0);    opacity:1; }
+}
+
+.modal-logo {
+  font-family:var(--mono); font-size:18px;
+  color:var(--teal); margin-bottom:4px;
+}
+.modal-sub { font-size:13px; color:var(--muted); margin-bottom:24px; }
+.modal-title { font-size:18px; font-weight:600; margin-bottom:4px; }
+
+.input-group { display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
+.input-label { font-size:12px; color:var(--muted); font-family:var(--mono); }
+.modal-input {
+  background:var(--bg);
+  border:1px solid var(--border);
+  color:var(--parchment);
+  font-family:var(--mono);
+  font-size:13px;
+  padding:10px 12px;
+  border-radius:var(--radius);
+  outline:none;
+  transition:border-color 0.15s;
+}
+.modal-input:focus { border-color:var(--accent); }
+
+.modal-submit {
+  width:100%; background:var(--accent); border:none;
+  color:#1a0a07; font-family:var(--mono); font-size:13px;
+  font-weight:700; padding:11px; border-radius:var(--radius);
+  cursor:pointer; transition:background 0.15s; margin-top:6px;
+}
+.modal-submit:hover { background:#ee6b53; }
+
+.modal-guest {
+  background:none; border:1px solid var(--border);
+  color:var(--muted); font-family:var(--mono); font-size:12px;
+  padding:9px; border-radius:var(--radius); cursor:pointer;
+  transition:all 0.15s; width:100%; margin-top:8px;
+}
+.modal-guest:hover { border-color:var(--teal); color:var(--teal); }
+
+.modal-switch {
+  margin-top:14px; font-size:12px; color:var(--muted); text-align:center;
+}
+.modal-switch a {
+  color:var(--teal); cursor:pointer; text-decoration:none;
+}
+
+.modal-divider {
+  display:flex; align-items:center; gap:10px;
+  margin:14px 0; color:var(--muted); font-size:11px; font-family:var(--mono);
+}
+.modal-divider::before,.modal-divider::after {
+  content:''; flex:1; height:1px; background:var(--border);
+}
+
+/* ── Win overlay ─────────────────────────────────────────────────────────── */
+.win-overlay {
+  position:fixed; inset:0;
+  background:rgba(15,17,23,0.9);
+  display:flex; align-items:center; justify-content:center;
+  z-index:900;
+  animation:fadeIn 0.3s ease;
+}
+.win-overlay.hidden { display:none; }
+
+.win-card {
+  background:var(--surface);
+  border:1px solid var(--teal);
+  border-radius:4px;
+  padding:36px;
+  text-align:center;
+  max-width:340px;
+  animation:winCardIn 0.45s cubic-bezier(0.34,1.56,0.64,1);
+  box-shadow:0 0 40px rgba(78,201,176,0.12);
+}
+@keyframes winCardIn {
+  from { transform:scale(0.7); opacity:0; }
+  to   { transform:scale(1);   opacity:1; }
+}
+
+.win-emoji { font-size:48px; margin-bottom:12px; display:block; animation:spin 0.6s ease; }
+@keyframes spin { from { transform:rotate(-20deg) scale(0.5); } to { transform:rotate(0deg) scale(1); } }
+
+.win-title { font-size:24px; font-weight:700; margin-bottom:6px; }
+.win-sub { font-size:13px; color:var(--muted); margin-bottom:20px; }
+
+.win-stats { display:flex; gap:20px; justify-content:center; margin-bottom:24px; }
+.win-stat { text-align:center; }
+.win-stat-val {
+  font-family:var(--mono); font-size:22px; font-weight:700;
+  color:var(--teal); display:block; margin-bottom:2px;
+}
+.win-stat-label { font-size:11px; color:var(--muted); font-family:var(--mono); }
+
+.win-btns { display:flex; gap:10px; flex-direction:column; }
+.win-btn-primary {
+  background:var(--accent); border:none; color:#1a0a07;
+  font-family:var(--mono); font-size:13px; font-weight:700;
+  padding:11px; border-radius:var(--radius); cursor:pointer;
+  transition:background 0.15s;
+}
+.win-btn-primary:hover { background:#ee6b53; }
+.win-btn-secondary {
+  background:var(--surface2); border:1px solid var(--border);
+  color:var(--parchment); font-family:var(--mono); font-size:12px;
+  padding:9px; border-radius:var(--radius); cursor:pointer;
+  transition:all 0.15s;
+}
+.win-btn-secondary:hover { border-color:var(--teal); color:var(--teal); }
+
+/* ── Toast ───────────────────────────────────────────────────────────────── */
+.toast {
+  position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(0);
+  background:var(--surface); border:1px solid var(--border);
+  color:var(--parchment); font-family:var(--mono); font-size:12px;
+  padding:10px 20px; border-radius:var(--radius);
+  z-index:800;
+  animation:toastIn 0.25s ease;
+  white-space:nowrap;
+}
+.toast.hidden { display:none; }
+.toast.error { border-color:var(--accent); color:var(--accent); }
+.toast.success { border-color:var(--green); color:var(--green); }
+
+@keyframes toastIn {
+  from { opacity:0; transform:translateX(-50%) translateY(12px); }
+  to   { opacity:1; transform:translateX(-50%) translateY(0); }
+}
+
+/* ── Particles ───────────────────────────────────────────────────────────── */
+.particle {
+  position:fixed;
+  width:6px; height:6px;
+  border-radius:50%;
+  pointer-events:none;
+  z-index:850;
+  animation:particleFly 1s ease forwards;
+}
+@keyframes particleFly {
+  0%   { opacity:1; transform:translate(0,0) scale(1); }
+  100% { opacity:0; transform:translate(var(--tx),var(--ty)) scale(0); }
+}
+
+/* ── Responsiveness ───────────────────────────────────────────────────────── */
+@media (max-width:680px) {
+  .cell { width:38px; height:38px; font-size:15px; }
+  .control-panel { max-width:100%; min-width:unset; width:100%; flex-direction:row; flex-wrap:wrap; }
+  .panel-section { flex:1 1 140px; }
+  .game-layout { gap:16px; }
+  .site-header { padding:12px 16px; }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  *,*::before,*::after { animation:none !important; transition:none !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="site-header">
+  <div class="logo">
+    my<span class="logo-dot">.</span>lang
+    <span style="color:var(--border);font-size:10px;">|</span>
+    <span style="color:var(--muted);font-size:11px;">sudoku</span>
+  </div>
+  <div class="header-right" id="headerRight">
+    <button class="sign-in-btn" id="signInBtn" onclick="showSignIn()">Sign In</button>
+  </div>
+</header>
+
+<!-- Game -->
+<div class="game-wrapper">
+  <div class="game-title">// sudoku game — select a difficulty to begin</div>
+
+  <!-- Difficulty + meta row -->
+  <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;width:100%;">
+    <div class="difficulty-strip" id="diffStrip">
+      <button class="diff-btn active" data-diff="easy" onclick="selectDifficulty('easy')">Easy</button>
+      <button class="diff-btn" data-diff="medium" onclick="selectDifficulty('medium')">Medium</button>
+      <button class="diff-btn locked" data-diff="hard" id="hardBtn" onclick="selectDifficulty('hard')">Hard</button>
+      <button class="diff-btn locked" data-diff="expert" id="expertBtn" onclick="selectDifficulty('expert')">Expert</button>
+    </div>
+    <div class="game-meta">
+      <div class="meta-item">
+        <span>⏱</span>
+        <span class="meta-value timer-digits" id="timerDisplay">00:00</span>
+      </div>
+      <div class="meta-item" id="mistakeMeta">
+        <span>✗</span>
+        <span class="meta-value" id="mistakeDisplay">0 / 3</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Grid + controls -->
+  <div class="game-layout">
+    <div class="grid-wrap">
+      <div class="sudoku-grid" id="grid"></div>
+    </div>
+
+    <div class="control-panel">
+      <!-- Numpad -->
+      <div class="panel-section">
+        <div class="panel-label">Numbers</div>
+        <div class="numpad" id="numpad"></div>
+      </div>
+
+      <!-- Actions -->
+      <div class="panel-section">
+        <div class="panel-label">Actions</div>
+        <div class="action-btns">
+          <button class="action-btn" id="noteToggle" onclick="toggleNoteMode()">
+            <span class="btn-icon">✏</span> Notes <span style="margin-left:auto;font-size:10px;color:var(--muted)" id="noteStatus">OFF</span>
+          </button>
+          <button class="action-btn" onclick="useHint()">
+            <span class="btn-icon">💡</span> Hint <span style="margin-left:auto;font-size:10px;color:var(--muted)" id="hintCount">3 left</span>
+          </button>
+          <button class="action-btn" onclick="eraseCell()">
+            <span class="btn-icon">⌫</span> Erase
+          </button>
+          <button class="action-btn danger" onclick="newGame()">
+            <span class="btn-icon">↺</span> New Game
+          </button>
+        </div>
+      </div>
+
+      <!-- Session stats -->
+      <div class="panel-section" id="statsPanel">
+        <div class="panel-label">Session</div>
+        <div id="statsBody">
+          <div class="stat-row">
+            <span class="stat-label">Solved today</span>
+            <span class="stat-val" id="statSolved">0</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Best time</span>
+            <span class="stat-val" id="statBest">--:--</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Win streak</span>
+            <span class="stat-val" id="statStreak">0</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Difficulty</span>
+            <span class="stat-val" id="statDiff" style="color:var(--teal)">Easy</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Sign-in modal -->
+<div class="modal-backdrop" id="signInModal">
+  <div class="modal">
+    <div class="modal-logo">my<span style="color:var(--accent)">.</span>lang</div>
+    <div class="modal-sub">Pacer · Sudoku</div>
+    <div class="modal-title" id="modalTitle">Welcome back</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:20px;" id="modalDesc">
+      Sign in to save your progress, unlock difficulty levels, and track your stats.
+    </p>
+
+    <form id="signInForm" onsubmit="handleSignIn(event)">
+      <div class="input-group" id="usernameGroup" style="display:none">
+        <label class="input-label">Username</label>
+        <input type="text" class="modal-input" id="usernameInput" placeholder="Choose a username" autocomplete="username">
+      </div>
+      <div class="input-group">
+        <label class="input-label">Email</label>
+        <input type="email" class="modal-input" id="emailInput" placeholder="you@example.com" autocomplete="email" required>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Password</label>
+        <input type="password" class="modal-input" id="passwordInput" placeholder="••••••••" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="modal-submit" id="modalSubmit">Sign In</button>
+    </form>
+
+    <div class="modal-divider">or</div>
+    <button class="modal-guest" onclick="continueAsGuest()">Continue as Guest</button>
+
+    <div class="modal-switch" id="modalSwitch">
+      No account? <a onclick="toggleAuthMode()">Create one</a>
+    </div>
+  </div>
+</div>
+
+<!-- Win overlay -->
+<div class="win-overlay hidden" id="winOverlay">
+  <div class="win-card">
+    <span class="win-emoji">🎉</span>
+    <div class="win-title">Puzzle Solved!</div>
+    <div class="win-sub" id="winSub">Well done on <span id="winDiff">Easy</span> difficulty</div>
+    <div class="win-stats">
+      <div class="win-stat">
+        <span class="win-stat-val" id="winTime">--:--</span>
+        <span class="win-stat-label">time</span>
+      </div>
+      <div class="win-stat">
+        <span class="win-stat-val" id="winMistakes">0</span>
+        <span class="win-stat-label">mistakes</span>
+      </div>
+      <div class="win-stat">
+        <span class="win-stat-val" id="winStreak">1</span>
+        <span class="win-stat-label">streak</span>
+      </div>
+    </div>
+    <div id="unlockMsg" style="font-size:12px;color:var(--teal);font-family:var(--mono);margin-bottom:18px;display:none;"></div>
+    <div class="win-btns">
+      <button class="win-btn-primary" onclick="newGame()">Play Again</button>
+      <button class="win-btn-secondary" onclick="closeWin()">Keep Board</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast hidden" id="toast"></div>
+
+<script>
+(function(){
+
+// ── State ──────────────────────────────────────────────────────────────────
+
+const S = {
+  user:       null,
+  isGuest:    false,
+  diff:       'easy',
+  puzzle:     null,   // 81-element flat array (given)
+  solution:   null,   // 81-element flat array
+  board:      null,   // current state
+  notes:      null,   // 81 × Set of note numbers
+  selected:   -1,
+  noteMode:   false,
+  hints:      3,
+  mistakes:   0,
+  maxMistakes:3,
+  solved:     false,
+  timerSecs:  0,
+  timerInt:   null,
+  stats: {
+    solved: 0,
+    best: null,
+    streak: 0,
+  },
+  unlocked: { easy:true, medium:false, hard:false, expert:false },
+};
+
+// Difficulty clue counts
+const DIFF_CLUES = { easy:40, medium:32, hard:26, expert:22 };
+
+// ── Persistent storage ─────────────────────────────────────────────────────
+
+function saveState() {
+  try {
+    const data = {
+      user:     S.user,
+      isGuest:  S.isGuest,
+      unlocked: S.unlocked,
+      stats:    S.stats,
+    };
+    localStorage.setItem('pacer_sudoku', JSON.stringify(data));
+  } catch(e) {}
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem('pacer_sudoku');
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    if (d.user)     S.user     = d.user;
+    if (d.isGuest)  S.isGuest  = d.isGuest;
+    if (d.unlocked) Object.assign(S.unlocked, d.unlocked);
+    if (d.stats)    Object.assign(S.stats,    d.stats);
+  } catch(e) {}
+}
+
+// ── Auth ───────────────────────────────────────────────────────────────────
+
+let authMode = 'signin'; // 'signin' | 'signup'
+
+function showSignIn() {
+  document.getElementById('signInModal').classList.remove('hidden');
+}
+
+function hideSignIn() {
+  document.getElementById('signInModal').classList.add('hidden');
+}
+
+function toggleAuthMode() {
+  authMode = authMode === 'signin' ? 'signup' : 'signin';
+  document.getElementById('modalTitle').textContent  = authMode === 'signin' ? 'Welcome back' : 'Create account';
+  document.getElementById('modalSubmit').textContent = authMode === 'signin' ? 'Sign In' : 'Create Account';
+  document.getElementById('modalSwitch').innerHTML   = authMode === 'signin'
+    ? 'No account? <a onclick="toggleAuthMode()">Create one</a>'
+    : 'Have an account? <a onclick="toggleAuthMode()">Sign in</a>';
+  document.getElementById('usernameGroup').style.display = authMode === 'signup' ? '' : 'none';
+}
+
+function handleSignIn(e) {
+  e.preventDefault();
+  const email    = document.getElementById('emailInput').value.trim();
+  const password = document.getElementById('passwordInput').value;
+  const username = document.getElementById('usernameInput').value.trim();
+  if (!email || !password) return;
+
+  // Simulated auth — in production this would hit a real backend
+  const name = authMode === 'signup'
+    ? (username || email.split('@')[0])
+    : email.split('@')[0];
+
+  S.user    = { name, email };
+  S.isGuest = false;
+
+  // Unlock medium for registered users
+  S.unlocked.medium = true;
+
+  saveState();
+  hideSignIn();
+  updateHeaderUser();
+  updateDiffButtons();
+  showToast(`Welcome, ${name}! 👋`, 'success');
+}
+
+function continueAsGuest() {
+  S.user    = null;
+  S.isGuest = true;
+  hideSignIn();
+  updateHeaderUser();
+  showToast('Playing as guest — progress won\'t be saved', 'info');
+}
+
+function updateHeaderUser() {
+  const hr = document.getElementById('headerRight');
+  if (S.user) {
+    const initials = S.user.name.slice(0,2).toUpperCase();
+    hr.innerHTML = `
+      <div class="user-badge" onclick="handleSignOut()">
+        <div class="user-avatar">${initials}</div>
+        <span class="user-name">${S.user.name}</span>
+        <span style="color:var(--muted);font-size:10px;">↩</span>
+      </div>`;
+  } else if (S.isGuest) {
+    hr.innerHTML = `
+      <div class="user-badge" onclick="showSignIn()">
+        <div class="user-avatar" style="background:var(--border);">?</div>
+        <span class="user-name" style="color:var(--muted)">Guest</span>
+      </div>`;
+  } else {
+    hr.innerHTML = `<button class="sign-in-btn" onclick="showSignIn()">Sign In</button>`;
+  }
+}
+
+function handleSignOut() {
+  S.user    = null;
+  S.isGuest = false;
+  saveState();
+  updateHeaderUser();
+  showToast('Signed out');
+}
+
+// ── Difficulty ─────────────────────────────────────────────────────────────
+
+function selectDifficulty(diff) {
+  if (!S.unlocked[diff]) {
+    if (!S.user && !S.isGuest) {
+      showSignIn();
+      return;
+    }
+    if (diff === 'hard' && !S.unlocked.hard) {
+      showToast('Solve 3 Medium puzzles to unlock Hard 🔒');
+      return;
+    }
+    if (diff === 'expert' && !S.unlocked.expert) {
+      showToast('Solve 5 Hard puzzles to unlock Expert 🔒');
+      return;
+    }
+  }
+  S.diff = diff;
+  updateDiffButtons();
+  document.getElementById('statDiff').textContent = diff.charAt(0).toUpperCase() + diff.slice(1);
+  newGame();
+}
+
+function updateDiffButtons() {
+  document.querySelectorAll('.diff-btn').forEach(btn => {
+    const d = btn.dataset.diff;
+    btn.classList.remove('active','locked');
+    if (d === S.diff) btn.classList.add('active');
+    if (!S.unlocked[d]) btn.classList.add('locked');
+  });
+}
+
+// ── Sudoku generator ───────────────────────────────────────────────────────
+
+function generatePuzzle(clueCount) {
+  // Fill a complete valid board using backtracking
+  const sol = Array(81).fill(0);
+  fillBoard(sol);
+
+  // Remove cells to create puzzle
+  const puzzle = [...sol];
+  const indices = shuffle([...Array(81).keys()]);
+  let removed = 0;
+  const target = 81 - clueCount;
+
+  for (const idx of indices) {
+    if (removed >= target) break;
+    const backup = puzzle[idx];
+    puzzle[idx] = 0;
+    if (hasUniqueSolution(puzzle)) {
+      removed++;
+    } else {
+      puzzle[idx] = backup;
+    }
+  }
+
+  return { puzzle, solution: sol };
+}
+
+function fillBoard(board) {
+  const nums = shuffle([1,2,3,4,5,6,7,8,9]);
+  for (let i = 0; i < 81; i++) {
+    if (board[i] === 0) {
+      for (const n of nums) {
+        if (isValid(board, i, n)) {
+          board[i] = n;
+          if (fillBoard(board)) return true;
+          board[i] = 0;
+        }
+      }
+      return false;
+    }
+  }
+  return true;
+}
+
+function hasUniqueSolution(puzzle) {
+  const board = [...puzzle];
+  let count = 0;
+  function solve(b) {
+    for (let i = 0; i < 81; i++) {
+      if (b[i] === 0) {
+        for (let n = 1; n <= 9; n++) {
+          if (isValid(b, i, n)) {
+            b[i] = n;
+            solve(b);
+            b[i] = 0;
+          }
+        }
+        return;
+      }
+    }
+    count++;
+  }
+  solve(board);
+  return count === 1;
+}
+
+function isValid(board, idx, num) {
+  const row = Math.floor(idx / 9);
+  const col = idx % 9;
+  const boxR = Math.floor(row / 3) * 3;
+  const boxC = Math.floor(col / 3) * 3;
+
+  for (let c = 0; c < 9; c++) {
+    if (board[row * 9 + c] === num && c !== col) return false;
+  }
+  for (let r = 0; r < 9; r++) {
+    if (board[r * 9 + col] === num && r !== row) return false;
+  }
+  for (let r = boxR; r < boxR + 3; r++) {
+    for (let c = boxC; c < boxC + 3; c++) {
+      if (r === row && c === col) continue;
+      if (board[r * 9 + c] === num) return false;
+    }
+  }
+  return true;
+}
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// ── Game lifecycle ─────────────────────────────────────────────────────────
+
+function newGame() {
+  closeWin();
+  stopTimer();
+  S.selected  = -1;
+  S.noteMode  = false;
+  S.hints     = 3;
+  S.mistakes  = 0;
+  S.solved    = false;
+  S.timerSecs = 0;
+
+  const clues = DIFF_CLUES[S.diff];
+  const { puzzle, solution } = generatePuzzle(clues);
+  S.puzzle   = puzzle;
+  S.solution = solution;
+  S.board    = [...puzzle];
+  S.notes    = Array(81).fill(null).map(() => new Set());
+
+  renderGrid();
+  updateNumpad();
+  updateNoteBtn();
+  updateHintCount();
+  updateMistakeDisplay();
+  updateTimerDisplay();
+  document.getElementById('timerDisplay').classList.remove('timer-anim');
+  startTimer();
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+
+function renderGrid() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+
+  for (let i = 0; i < 81; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    cell.dataset.idx = i;
+    cell.dataset.row = Math.floor(i / 9);
+    cell.dataset.col = i % 9;
+    cell.addEventListener('click', () => selectCell(i));
+
+    renderCellContent(cell, i);
+    grid.appendChild(cell);
+  }
+}
+
+function renderCellContent(cell, i) {
+  cell.innerHTML = '';
+  cell.classList.remove('given','error','correct-flash','shake','win-wave');
+
+  if (S.puzzle[i] !== 0) {
+    cell.textContent = S.puzzle[i];
+    cell.classList.add('given');
+  } else if (S.board[i] !== 0) {
+    cell.textContent = S.board[i];
+    if (S.board[i] !== S.solution[i]) {
+      cell.classList.add('error');
+    }
+  } else {
+    const notes = S.notes[i];
+    if (notes.size > 0) {
+      const noteGrid = document.createElement('div');
+      noteGrid.className = 'cell-notes';
+      for (let n = 1; n <= 9; n++) {
+        const nd = document.createElement('div');
+        nd.className = 'cell-note';
+        nd.textContent = notes.has(n) ? n : '';
+        noteGrid.appendChild(nd);
+      }
+      cell.appendChild(noteGrid);
+    }
+  }
+}
+
+function refreshCell(i) {
+  const cell = document.querySelector(`.cell[data-idx="${i}"]`);
+  if (cell) renderCellContent(cell, i);
+}
+
+function updateHighlights() {
+  const cells = document.querySelectorAll('.cell');
+  const sel = S.selected;
+
+  cells.forEach(c => {
+    c.classList.remove('selected','highlight');
+    const i   = +c.dataset.idx;
+    const row = Math.floor(i / 9);
+    const col = i % 9;
+
+    if (sel === -1) return;
+
+    const selRow = Math.floor(sel / 9);
+    const selCol = sel % 9;
+    const selVal = S.board[sel] || S.puzzle[sel];
+
+    if (i === sel) {
+      c.classList.add('selected');
+    } else if (
+      row === selRow ||
+      col === selCol ||
+      (Math.floor(row/3) === Math.floor(selRow/3) &&
+       Math.floor(col/3) === Math.floor(selCol/3))
+    ) {
+      c.classList.add('highlight');
+    } else if (selVal !== 0 && (S.board[i] === selVal || S.puzzle[i] === selVal)) {
+      c.classList.add('highlight');
+    }
+  });
+}
+
+function updateNumpad() {
+  const pad = document.getElementById('numpad');
+  pad.innerHTML = '';
+  const counts = Array(10).fill(0);
+  for (let i = 0; i < 81; i++) {
+    const v = S.board[i] || S.puzzle[i];
+    if (v) counts[v]++;
+  }
+
+  for (let n = 1; n <= 9; n++) {
+    const btn = document.createElement('button');
+    btn.className = 'num-btn' + (counts[n] >= 9 ? ' used' : '');
+    btn.innerHTML = `${n}<span class="num-count">${9 - counts[n]}</span>`;
+    btn.addEventListener('click', () => placeNumber(n));
+    pad.appendChild(btn);
+  }
+}
+
+function updateNoteBtn() {
+  const btn  = document.getElementById('noteToggle');
+  const stat = document.getElementById('noteStatus');
+  if (S.noteMode) {
+    btn.classList.add('note-active');
+    stat.textContent = 'ON';
+    stat.style.color = 'var(--amber)';
+  } else {
+    btn.classList.remove('note-active');
+    stat.textContent = 'OFF';
+    stat.style.color = 'var(--muted)';
+  }
+}
+
+function updateHintCount() {
+  document.getElementById('hintCount').textContent = `${S.hints} left`;
+}
+
+function updateMistakeDisplay() {
+  document.getElementById('mistakeDisplay').textContent = `${S.mistakes} / ${S.maxMistakes}`;
+}
+
+// ── Interaction ────────────────────────────────────────────────────────────
+
+function selectCell(i) {
+  if (S.solved) return;
+  S.selected = (S.selected === i) ? -1 : i;
+  updateHighlights();
+}
+
+function placeNumber(num) {
+  if (S.solved) return;
+  const i = S.selected;
+  if (i === -1) return;
+  if (S.puzzle[i] !== 0) return; // given cell — can't change
+
+  if (S.noteMode) {
+    if (S.board[i] !== 0) return;
+    const notes = S.notes[i];
+    if (notes.has(num)) notes.delete(num);
+    else                notes.add(num);
+    refreshCell(i);
+    return;
+  }
+
+  // Place the number
+  S.board[i] = num;
+  S.notes[i].clear();
+  // Remove this number from notes in related cells
+  clearRelatedNotes(i, num);
+  refreshCell(i);
+
+  const cell = document.querySelector(`.cell[data-idx="${i}"]`);
+
+  if (num !== S.solution[i]) {
+    S.mistakes++;
+    updateMistakeDisplay();
+    cell.classList.add('shake');
+    setTimeout(() => cell.classList.remove('shake'), 400);
+    showToast(`Mistake! ${S.mistakes}/${S.maxMistakes}`, 'error');
+    if (S.mistakes >= S.maxMistakes) {
+      showToast('Too many mistakes! Resetting...', 'error');
+      setTimeout(() => newGame(), 1400);
+      return;
+    }
+  } else {
+    cell.classList.add('correct-flash');
+    setTimeout(() => cell.classList.remove('correct-flash'), 450);
+    checkWin();
+  }
+
+  updateNumpad();
+  updateHighlights();
+}
+
+function clearRelatedNotes(idx, num) {
+  const row  = Math.floor(idx / 9);
+  const col  = idx % 9;
+  const boxR = Math.floor(row / 3) * 3;
+  const boxC = Math.floor(col / 3) * 3;
+
+  for (let c = 0; c < 9; c++) {
+    if (c !== col) { S.notes[row*9+c].delete(num); refreshCell(row*9+c); }
+  }
+  for (let r = 0; r < 9; r++) {
+    if (r !== row) { S.notes[r*9+col].delete(num); refreshCell(r*9+col); }
+  }
+  for (let r = boxR; r < boxR+3; r++) {
+    for (let c = boxC; c < boxC+3; c++) {
+      if (r !== row || c !== col) { S.notes[r*9+c].delete(num); refreshCell(r*9+c); }
+    }
+  }
+}
+
+function eraseCell() {
+  const i = S.selected;
+  if (i === -1 || S.puzzle[i] !== 0 || S.solved) return;
+  S.board[i] = 0;
+  S.notes[i].clear();
+  refreshCell(i);
+  updateNumpad();
+  updateHighlights();
+}
+
+function toggleNoteMode() {
+  S.noteMode = !S.noteMode;
+  updateNoteBtn();
+}
+
+function useHint() {
+  if (S.hints <= 0 || S.solved) { showToast('No hints remaining!'); return; }
+  if (S.selected === -1) { showToast('Select a cell first'); return; }
+  const i = S.selected;
+  if (S.puzzle[i] !== 0) { showToast('That cell is a given'); return; }
+
+  S.hints--;
+  S.board[i] = S.solution[i];
+  S.notes[i].clear();
+  clearRelatedNotes(i, S.solution[i]);
+  refreshCell(i);
+  updateNumpad();
+  updateHighlights();
+  updateHintCount();
+
+  const cell = document.querySelector(`.cell[data-idx="${i}"]`);
+  cell.classList.add('correct-flash');
+  setTimeout(() => cell.classList.remove('correct-flash'), 450);
+  showToast(`Hint used — ${S.hints} remaining`, 'success');
+  checkWin();
+}
+
+// Keyboard
+document.addEventListener('keydown', e => {
+  if (document.getElementById('signInModal').classList.contains('hidden') === false) return;
+
+  if (e.key >= '1' && e.key <= '9') placeNumber(+e.key);
+  if (e.key === 'Backspace' || e.key === 'Delete') eraseCell();
+  if (e.key === 'n' || e.key === 'N') toggleNoteMode();
+
+  const arrows = { ArrowUp:-9, ArrowDown:9, ArrowLeft:-1, ArrowRight:1 };
+  if (arrows[e.key] !== undefined && S.selected !== -1) {
+    const next = S.selected + arrows[e.key];
+    if (next >= 0 && next < 81) { S.selected = next; updateHighlights(); }
+    e.preventDefault();
+  }
+});
+
+// ── Win check ──────────────────────────────────────────────────────────────
+
+function checkWin() {
+  for (let i = 0; i < 81; i++) {
+    const v = S.board[i] || S.puzzle[i];
+    if (v !== S.solution[i]) return;
+  }
+  // Solved!
+  S.solved = true;
+  stopTimer();
+
+  const elapsed = S.timerSecs;
+  S.stats.solved++;
+  S.stats.streak++;
+  if (!S.stats.best || elapsed < S.stats.best) S.stats.best = elapsed;
+
+  // Unlock next difficulty
+  let unlockMsg = '';
+  if (S.diff === 'easy' && S.stats.solved >= 1) {
+    if (!S.unlocked.medium) { S.unlocked.medium = true; unlockMsg = '🔓 Medium difficulty unlocked!'; }
+  }
+  if (S.diff === 'medium' && S.stats.streak >= 3) {
+    if (!S.unlocked.hard)   { S.unlocked.hard   = true; unlockMsg = '🔓 Hard difficulty unlocked!'; }
+  }
+  if (S.diff === 'hard' && S.stats.streak >= 5) {
+    if (!S.unlocked.expert) { S.unlocked.expert  = true; unlockMsg = '🔓 Expert difficulty unlocked!'; }
+  }
+
+  updateDiffButtons();
+  if (S.user) saveState();
+  updateSessionStats();
+
+  // Win wave animation — cascade from top-left
+  const cells = document.querySelectorAll('.cell');
+  cells.forEach((cell, i) => {
+    const row = Math.floor(i / 9);
+    const col = i % 9;
+    const delay = (row + col) * 35;
+    setTimeout(() => {
+      cell.classList.add('win-wave');
+    }, delay);
+  });
+
+  // Particles
+  setTimeout(() => launchParticles(), 400);
+
+  // Show win overlay
+  setTimeout(() => {
+    document.getElementById('winTime').textContent     = formatTime(elapsed);
+    document.getElementById('winMistakes').textContent = S.mistakes;
+    document.getElementById('winStreak').textContent   = S.stats.streak;
+    document.getElementById('winDiff').textContent     = S.diff.charAt(0).toUpperCase() + S.diff.slice(1);
+
+    const unlockEl = document.getElementById('unlockMsg');
+    if (unlockMsg) {
+      unlockEl.textContent = unlockMsg;
+      unlockEl.style.display = '';
+    } else {
+      unlockEl.style.display = 'none';
+    }
+
+    document.getElementById('winOverlay').classList.remove('hidden');
+  }, 1200);
+}
+
+function closeWin() {
+  document.getElementById('winOverlay').classList.add('hidden');
+}
+
+function launchParticles() {
+  const colors = ['#E2543C','#4EC9B0','#F2EBDD','#6A9955','#CE9178'];
+  const cx = window.innerWidth  / 2;
+  const cy = window.innerHeight / 2;
+
+  for (let p = 0; p < 40; p++) {
+    const el = document.createElement('div');
+    el.className = 'particle';
+    el.style.left     = cx + 'px';
+    el.style.top      = cy + 'px';
+    el.style.background = colors[p % colors.length];
+
+    const angle   = Math.random() * Math.PI * 2;
+    const dist    = 80 + Math.random() * 200;
+    el.style.setProperty('--tx', Math.cos(angle) * dist + 'px');
+    el.style.setProperty('--ty', Math.sin(angle) * dist + 'px');
+    el.style.animationDelay = (Math.random() * 0.3) + 's';
+
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 1500);
+  }
+}
+
+// ── Timer ──────────────────────────────────────────────────────────────────
+
+function startTimer() {
+  S.timerInt = setInterval(() => {
+    S.timerSecs++;
+    updateTimerDisplay();
+    if (S.timerSecs > 10) {
+      document.getElementById('timerDisplay').classList.add('timer-anim');
+    }
+  }, 1000);
+}
+
+function stopTimer() {
+  clearInterval(S.timerInt);
+  document.getElementById('timerDisplay').classList.remove('timer-anim');
+}
+
+function updateTimerDisplay() {
+  document.getElementById('timerDisplay').textContent = formatTime(S.timerSecs);
+}
+
+function formatTime(s) {
+  const m = Math.floor(s / 60).toString().padStart(2,'0');
+  const sec = (s % 60).toString().padStart(2,'0');
+  return `${m}:${sec}`;
+}
+
+// ── Stats ──────────────────────────────────────────────────────────────────
+
+function updateSessionStats() {
+  document.getElementById('statSolved').textContent = S.stats.solved;
+  document.getElementById('statBest').textContent   = S.stats.best ? formatTime(S.stats.best) : '--:--';
+  document.getElementById('statStreak').textContent  = S.stats.streak;
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+
+let toastTimer = null;
+function showToast(msg, type = 'info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + (type === 'error' ? 'error' : type === 'success' ? 'success' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.add('hidden'), 2800);
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+
+loadState();
+updateHeaderUser();
+updateDiffButtons();
+updateSessionStats();
+newGame();
+
+// Show sign-in on first load if no session
+if (!S.user && !S.isGuest) {
+  setTimeout(() => showSignIn(), 600);
+}
+
+// Expose for HTML onclick
+window.selectDifficulty = selectDifficulty;
+window.toggleNoteMode   = toggleNoteMode;
+window.useHint          = useHint;
+window.eraseCell        = eraseCell;
+window.newGame          = newGame;
+window.showSignIn       = showSignIn;
+window.handleSignIn     = handleSignIn;
+window.continueAsGuest  = continueAsGuest;
+window.toggleAuthMode   = toggleAuthMode;
+window.closeWin         = closeWin;
+
+})();
+</script>
+</body>
+</html>

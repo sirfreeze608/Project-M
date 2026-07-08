@@ -1,0 +1,4 @@
+Python 3.14.0
+C:\Python314\python.exe
+C:\Users\admin\AppData\Local\Programs\Python\Python313\python.exe
+C:\Users\admin\AppData\Local\Microsoft\WindowsApps\python.exe

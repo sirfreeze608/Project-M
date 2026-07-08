@@ -3,7 +3,7 @@ setlocal EnableDelayedExpansion
 
 echo.
 echo ============================================
-echo   Pacer + mylang  v0.4.0  ^|  Windows Setup
+echo   Pacer + mylang  v0.5.1  ^|  Windows Setup
 echo ============================================
 echo.
 

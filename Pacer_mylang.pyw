@@ -1,5 +1,5 @@
 """
-Pacer + mylang  v0.4.0
+Pacer + mylang  v0.5.1
 A production-ready code editor for the mylang language.
 """
 
@@ -556,7 +556,7 @@ class SettingsDialog(QDialog):
              "color:#D4D4D4;font-size:22px;font-weight:bold;"),
             ("A production-ready code editor for the mylang language",
              "color:#888;font-size:12px;"),
-            ("Version 0.4.0",
+            ("Version 0.5.1",
              "color:#569CD6;font-size:12px;"),
         ]:
             l = QLabel(text); l.setStyleSheet(style); v.addWidget(l)
