@@ -1,5 +1,5 @@
 """
-Pacer + mylang  v0.4.0
+Pacer + mylang  v0.7.0
 A production-ready code editor for the mylang language.
 """
 
@@ -556,7 +556,7 @@ class SettingsDialog(QDialog):
              "color:#D4D4D4;font-size:22px;font-weight:bold;"),
             ("A production-ready code editor for the mylang language",
              "color:#888;font-size:12px;"),
-            ("Version 0.4.0",
+            ("Version 0.7.0",
              "color:#569CD6;font-size:12px;"),
         ]:
             l = QLabel(text); l.setStyleSheet(style); v.addWidget(l)
@@ -645,6 +645,7 @@ class SettingsDialog(QDialog):
 
 class MylangRunner:
     def run(self, source: str) -> tuple:
+        sys.setrecursionlimit(20000)   # deep recursion for the tree-walker
         if not MYLANG_AVAILABLE:
             return "", "mylang not found — place the mylang/ folder next to Pacer_mylang.py"
         old = sys.stdout
@@ -656,7 +657,11 @@ class MylangRunner:
             interp.run(ast)
             return buf.getvalue(), ""
         except (LexerError, ParseError, MylangRuntimeError) as e:
-            return "", str(e)
+            try:
+                from errors import format_error
+                return "", format_error(source, e)
+            except Exception:
+                return "", str(e)
         except Exception:
             return "", f"Internal error:\n{traceback.format_exc()}"
         finally:
@@ -1036,6 +1041,14 @@ class CodeEditor(QPlainTextEdit):
     # ── Key handling ──────────────────────────────────────────────────────────
 
     def keyPressEvent(self, event):
+        # ── Autocomplete popup ─────────────────────────────────────────────
+        if hasattr(self, '_completer') and self._completer.popup().isVisible():
+            if event.key() in (Qt.Key_Return, Qt.Key_Enter,
+                               Qt.Key_Tab, Qt.Key_Escape,
+                               Qt.Key_Up, Qt.Key_Down):
+                event.ignore()
+                return
+
         if event.key() in (Qt.Key_Return, Qt.Key_Enter):
             if _settings.get("auto_indent", True):
                 cursor = self.textCursor()
@@ -1048,9 +1061,129 @@ class CodeEditor(QPlainTextEdit):
             else:
                 super().keyPressEvent(event)
         elif event.key() == Qt.Key_Tab:
+            if hasattr(self, '_completer') and self._completer.popup().isVisible():
+                self._completer.popup().hide()
             self.insertPlainText(" " * _settings.get("tab_width", 4))
         else:
             super().keyPressEvent(event)
+            # Trigger autocomplete after typing word characters
+            if event.text() and (event.text().isalpha() or event.text() == "."):
+                self._trigger_autocomplete()
+
+    def _trigger_autocomplete(self):
+        """Show completion popup based on current word prefix."""
+        from PyQt5.QtWidgets import QCompleter
+        from PyQt5.QtCore import QStringListModel
+
+        COMPLETIONS = [
+            # Keywords
+            "let","fn","if","else","while","for","in","return","print",
+            "true","false","null","import","try","catch","throw",
+            # math.*
+            "math.sqrt","math.pow","math.abs","math.floor","math.ceil",
+            "math.round","math.sin","math.cos","math.tan","math.log",
+            "math.exp","math.random","math.rand_int","math.quadratic",
+            "math.PI","math.E","math.TAU","math.PHI",
+            # stats.*
+            "stats.mean","stats.median","stats.mode","stats.stdev",
+            "stats.variance","stats.linreg","stats.normalize","stats.zscore",
+            "stats.percentile","stats.histogram","stats.correlation",
+            # ee.*
+            "ee.voltage","ee.current","ee.resistance","ee.power",
+            "ee.series","ee.parallel","ee.impedance_rlc","ee.resonant_freq",
+            "ee.xc","ee.xl","ee.rc_charge","ee.phasor","ee.to_db",
+            "ee.thevenin","ee.bandwidth","ee.EPSILON0","ee.BOLTZMANN",
+            # chart.*
+            "chart.page","chart.line","chart.bar","chart.scatter",
+            "chart.pie","chart.area","chart.histogram","chart.multi_line",
+            "chart.show",
+            # html.*
+            "html.page","html.heading","html.text","html.result","html.kv",
+            "html.table","html.list","html.code","html.raw","html.divider",
+            "html.render","html.show",
+            # file.*
+            "file.read","file.write","file.append","file.exists",
+            "file.delete","file.list","file.mkdir","file.copy",
+            # json.* / http.* / time.*  (v0.7.0)
+            "json.parse","json.stringify","json.pretty",
+            "http.get","http.post","http.get_json",
+            "time.now","time.millis","time.today","time.format",
+            "time.sleep","time.elapsed","time.parse",
+            # crypto.*
+            "crypto.sha256","crypto.hmac","crypto.pbkdf2",
+            "crypto.encrypt_aes","crypto.decrypt_aes",
+            "crypto.secure_store","crypto.secure_retrieve","crypto.secure_wipe",
+            # image.*
+            "image.blank","image.rect","image.circle","image.line",
+            "image.text","image.show","image.load",
+            # csv.*
+            "csv.parse","csv.stringify",
+            # Built-ins
+            "len","type","str","num","push","pop","range",
+            "sqrt","sin","cos","tan","round","abs","floor","ceil",
+            "matrix","complex","range",
+        ]
+
+        cursor = self.textCursor()
+        cursor.select(cursor.WordUnderCursor)
+        prefix = cursor.selectedText()
+
+        # Include dot prefix for namespace completions
+        pos = self.textCursor().position()
+        doc_text = self.toPlainText()
+        start = max(0, pos - 30)
+        snippet = doc_text[start:pos]
+        # Find the word including any preceding namespace (e.g. "chart.")
+        import re as _re
+        m = _re.search(r'[\w.]+$', snippet)
+        if m:
+            prefix = m.group()
+
+        if len(prefix) < 2:
+            if hasattr(self, '_completer'):
+                self._completer.popup().hide()
+            return
+
+        matches = [c for c in COMPLETIONS if c.startswith(prefix)]
+        if not matches:
+            if hasattr(self, '_completer'):
+                self._completer.popup().hide()
+            return
+
+        if not hasattr(self, '_completer'):
+            self._completer = QCompleter(self)
+            self._completer.setWidget(self)
+            self._completer.setCompletionMode(QCompleter.PopupCompletion)
+            self._completer.setCaseSensitivity(Qt.CaseInsensitive)
+            self._completer.activated.connect(self._insert_completion)
+            popup = self._completer.popup()
+            popup.setStyleSheet(
+                "QListView{background:#1A1D27;color:#D4D4D4;border:1px solid #4EC9B0;"
+                "font-family:Consolas,monospace;font-size:12px;selection-background-color:#264F78;}"
+            )
+
+        self._completer.setModel(QStringListModel(matches))
+        self._completer.setCompletionPrefix(prefix)
+
+        cr = self.cursorRect()
+        cr.setWidth(self._completer.popup().sizeHintForColumn(0)
+                    + self._completer.popup().verticalScrollBar().sizeHint().width())
+        self._completer.complete(cr)
+
+    def _insert_completion(self, completion: str):
+        """Replace the current word prefix with the selected completion."""
+        cursor = self.textCursor()
+        pos    = cursor.position()
+        doc    = self.toPlainText()
+        start  = max(0, pos - 30)
+        snippet = doc[start:pos]
+        import re as _re
+        m = _re.search(r'[\w.]+$', snippet)
+        if m:
+            extra = len(m.group())
+            cursor.movePosition(cursor.Left, cursor.KeepAnchor, extra)
+        cursor.insertText(completion)
+        self.setTextCursor(cursor)
 
 
 # =============================================================================
@@ -1200,12 +1333,18 @@ class MainWindow(QMainWindow):
         self.create_output_panel()
         self.create_command_panel()
         self.create_visual_panel()
+        self.create_browser_panel()
+        self.create_gallery_panel()
 
         # Hook image.show() and html.show(["panel"]) into the Visual Panel
         import stdlib as _stdlib
         _stdlib._IMAGE_SHOW_HOOK    = self._show_svg
         _stdlib._HTML_PANEL_HOOK    = self._show_html_panel
         _stdlib._HTML_FILE_DIR_HOOK = self._html_output_dir
+
+        # Hook chart.show(["panel"]) and chart.show(["file"]) into Browser Panel
+        _stdlib._CHART_PANEL_HOOK    = self._show_chart_panel
+        _stdlib._CHART_FILE_DIR_HOOK = self._html_output_dir
 
         # Status bar — must be created BEFORE set_project_folder is called
         self.status = self.statusBar()
@@ -1374,6 +1513,7 @@ class MainWindow(QMainWindow):
             ("editor",    "📝  Editor Only"),
             ("split",     "⚡  Editor + Output"),
             ("canvas",    "🎨  Editor + Visual Panel"),
+            ("browser",   "🌐  Editor + Browser Panel"),
             ("fullscreen","🔲  Full Screen"),
         ]:
             a = QAction(mode_label, self)
@@ -1388,6 +1528,8 @@ class MainWindow(QMainWindow):
             ("Toggle Output Panel",       self._toggle_output_panel),
             ("Toggle AI Assistant Panel", self._toggle_ai_panel),
             ("Toggle Visual Panel",       self._toggle_visual_panel),
+            ("Toggle Browser Panel",      self._toggle_browser_panel),
+            ("Toggle Example Gallery",    self._toggle_gallery_panel),
             ("Toggle File Tree",          self._toggle_file_tree),
         ]:
             a = QAction(label, self); a.triggered.connect(slot); vm.addAction(a)
@@ -1559,6 +1701,14 @@ class MainWindow(QMainWindow):
             self.explorer_panel.hide()
             self.status.showMessage("Mode: Editor + Visual Canvas")
 
+        elif mode == "browser":
+            self._output_dock.show()
+            self._ai_dock.hide()
+            self._visual_dock.hide()
+            self._browser_dock.show()
+            self.explorer_panel.hide()
+            self.status.showMessage("Mode: Editor + Browser Panel")
+
         elif mode == "fullscreen":
             if self.isFullScreen():
                 self.showNormal()
@@ -1620,6 +1770,341 @@ class MainWindow(QMainWindow):
     def _clear_visual(self):
         self._visual_view.clear()
         self._visual_title_lbl.setText("Canvas")
+
+    # ── Browser Panel (QWebEngineView for charts, HTML, and gallery) ──────────
+
+    def create_browser_panel(self):
+        """Full-fidelity browser dock — renders Chart.js, CSS, and JS properly.
+        Falls back to a QTextEdit with a clickable link if PyQtWebEngine is missing."""
+        self._browser_dock = QDockWidget("Browser", self)
+        self._browser_dock.setAllowedAreas(
+            Qt.RightDockWidgetArea | Qt.BottomDockWidgetArea)
+        self.addDockWidget(Qt.RightDockWidgetArea, self._browser_dock)
+
+        panel = QWidget()
+        vbox  = QVBoxLayout(panel)
+        vbox.setContentsMargins(4, 4, 4, 4)
+
+        # Header bar
+        hdr = QHBoxLayout()
+        self._browser_title_lbl = QLabel("Browser")
+        self._browser_title_lbl.setStyleSheet("font-weight:bold; color:#4EC9B0;")
+        self._browser_url_lbl = QLabel("")
+        self._browser_url_lbl.setStyleSheet("color:#7A7F9A; font-size:10px;")
+        self._browser_url_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        refresh_btn = QPushButton("⟳"); refresh_btn.setFixedWidth(28)
+        gallery_btn = QPushButton("📚 Gallery"); gallery_btn.setFixedWidth(80)
+        refresh_btn.clicked.connect(self._browser_refresh)
+        gallery_btn.clicked.connect(self._show_gallery)
+        hdr.addWidget(self._browser_title_lbl)
+        hdr.addWidget(self._browser_url_lbl, 1)
+        hdr.addWidget(refresh_btn)
+        hdr.addWidget(gallery_btn)
+        vbox.addLayout(hdr)
+
+        # Try QWebEngineView first
+        self._browser_web = None
+        try:
+            from PyQt5.QtWebEngineWidgets import QWebEngineView
+            self._browser_web = QWebEngineView()
+            self._browser_web.setMinimumWidth(340)
+            vbox.addWidget(self._browser_web)
+            self._browser_has_web = True
+        except ImportError:
+            # Fallback: plain text area with open-in-browser button
+            self._browser_fallback = QTextEdit()
+            self._browser_fallback.setReadOnly(True)
+            self._browser_fallback.setStyleSheet("background:#1A1D27; border:none; color:#7A7F9A; font-family:monospace; font-size:11px;")
+            self._browser_fallback.setPlainText(
+                "PyQtWebEngine not installed.\n\n"
+                "Charts and HTML previews open in your system browser.\n\n"
+                "To enable the inline browser panel, install:\n"
+                "  pip install PyQtWebEngine\n\n"
+                "Current file will open in your browser when you run chart.show().")
+            vbox.addWidget(self._browser_fallback)
+            self._browser_has_web = False
+
+        self._browser_dock.setWidget(panel)
+        self._browser_dock.hide()
+        self._browser_current_html = ""
+
+    def _browser_load_html(self, title: str, html: str):
+        """Load an HTML string into the browser panel."""
+        self._browser_title_lbl.setText(f"Browser — {title}")
+        self._browser_current_html = html
+        if self._browser_has_web:
+            self._browser_web.setHtml(html)
+        else:
+            # Show a summary in the fallback view
+            import re
+            text = re.sub(r'<[^>]+>', ' ', html)
+            text = re.sub(r'  +', ' ', text).strip()
+            self._browser_fallback.setPlainText(
+                f"[{title}]\nInstall PyQtWebEngine to preview here.\n\n"
+                f"Preview (text only):\n{text[:500]}...")
+        self._browser_dock.show()
+
+    def _browser_load_url(self, title: str, url: str):
+        """Load a file:// or https:// URL into the browser panel."""
+        self._browser_title_lbl.setText(f"Browser — {title}")
+        self._browser_url_lbl.setText(url.replace("file://",""))
+        if self._browser_has_web:
+            from PyQt5.QtCore import QUrl
+            self._browser_web.load(QUrl(url))
+        self._browser_dock.show()
+
+    def _browser_refresh(self):
+        if self._browser_has_web and self._browser_web:
+            if self._browser_current_html:
+                self._browser_web.setHtml(self._browser_current_html)
+            else:
+                self._browser_web.reload()
+
+    def _toggle_browser_panel(self):
+        self._browser_dock.setVisible(not self._browser_dock.isVisible())
+
+    def _show_chart_panel(self, title: str, html: str):
+        """Called by chart.show(['panel']) — renders the chart in the browser panel."""
+        self._browser_load_html(title, html)
+
+    # ── Example Gallery Panel ─────────────────────────────────────────────────
+
+    # Metadata for all bundled examples
+    GALLERY_EXAMPLES = [
+        {
+            "file": "hello.ml",
+            "title": "Hello World",
+            "desc": "Your first mylang script. Variables, print, and basic syntax.",
+            "tags": ["beginner", "basics"],
+            "icon": "👋",
+        },
+        {
+            "file": "fibonacci.ml",
+            "title": "Fibonacci Sequence",
+            "desc": "Generates the Fibonacci sequence using a while loop.",
+            "tags": ["beginner", "loops"],
+            "icon": "🔢",
+        },
+        {
+            "file": "fizzbuzz.ml",
+            "title": "FizzBuzz",
+            "desc": "Classic interview problem using for-in and conditionals.",
+            "tags": ["beginner", "loops"],
+            "icon": "🔀",
+        },
+        {
+            "file": "functions.ml",
+            "title": "Functions & Closures",
+            "desc": "First-class functions, closures, and higher-order programming.",
+            "tags": ["intermediate", "functions"],
+            "icon": "🔧",
+        },
+        {
+            "file": "arrays.ml",
+            "title": "Arrays & Hashes",
+            "desc": "Array methods (map, filter, reduce), hash maps, and data structures.",
+            "tags": ["intermediate", "data"],
+            "icon": "📦",
+        },
+        {
+            "file": "math_stats.ml",
+            "title": "Math & Statistics",
+            "desc": "Full math.* and stats.* namespace showcase with real datasets.",
+            "tags": ["math", "statistics"],
+            "icon": "📊",
+        },
+        {
+            "file": "ee_showcase.ml",
+            "title": "Electrical Engineering",
+            "desc": "Ohm's law, RLC circuits, impedance, resonance, and phasors.",
+            "tags": ["engineering", "EE"],
+            "icon": "⚡",
+        },
+        {
+            "file": "complex_matrix.ml",
+            "title": "Complex Numbers & Matrices",
+            "desc": "AC circuit analysis, matrix operations, and linear algebra.",
+            "tags": ["math", "engineering"],
+            "icon": "🧮",
+        },
+        {
+            "file": "html_quadratic_solver.ml",
+            "title": "Quadratic Solver → HTML",
+            "desc": "Solves ax²+bx+c=0 and outputs a styled HTML result page.",
+            "tags": ["html", "math"],
+            "icon": "🌐",
+        },
+        {
+            "file": "sudoku_html.ml",
+            "title": "Sudoku Solver → HTML",
+            "desc": "Backtracking constraint solver with styled side-by-side HTML output.",
+            "tags": ["html", "algorithms"],
+            "icon": "🧩",
+        },
+        {
+            "file": "sudoku_game.ml",
+            "title": "Playable Sudoku Game",
+            "desc": "Full browser game with difficulty levels, sign-in, and animations.",
+            "tags": ["html", "game", "advanced"],
+            "icon": "🎮",
+        },
+        {
+            "file": "chart_demo.ml",
+            "title": "Chart Demo",
+            "desc": "Line, bar, pie, scatter, area, and histogram charts with chart.*",
+            "tags": ["chart", "new", "v0.7.0"],
+            "icon": "📈",
+        },
+        {
+            "file": "new_syntax.ml",
+            "title": "v0.7.0 New Syntax",
+            "desc": "Template literals, try/catch/throw, and import statement.",
+            "tags": ["new", "v0.7.0", "syntax"],
+            "icon": "✨",
+        },
+        {
+            "file": "file_demo.ml",
+            "title": "File Operations",
+            "desc": "Read, write, append, copy, list, and delete files with file.*",
+            "tags": ["file", "new", "v0.7.0"],
+            "icon": "📁",
+        },
+        {
+            "file": "api_demo.ml",
+            "title": "HTTP API Calls",
+            "desc": "Fetch real APIs with http.*, parse with json.*, time with time.*",
+            "tags": ["http", "new", "v0.7.0"],
+            "icon": "🌍",
+        },
+        {
+            "file": "new_features.ml",
+            "title": "Crypto & Image",
+            "desc": "SHA-256, AES encryption, HMAC, SVG canvas drawing.",
+            "tags": ["crypto", "image", "advanced"],
+            "icon": "🔐",
+        },
+    ]
+
+    def create_gallery_panel(self):
+        """Example gallery dock — lists all bundled .ml files with open buttons."""
+        self._gallery_dock = QDockWidget("Example Gallery", self)
+        self._gallery_dock.setAllowedAreas(
+            Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+        self.addDockWidget(Qt.LeftDockWidgetArea, self._gallery_dock)
+
+        panel = QWidget()
+        vbox  = QVBoxLayout(panel)
+        vbox.setContentsMargins(6, 6, 6, 6)
+
+        # Search bar
+        self._gallery_search = QLineEdit()
+        self._gallery_search.setPlaceholderText("🔍  Filter examples…")
+        self._gallery_search.setStyleSheet(
+            "background:#2A2E42; border:1px solid #3C3C3C; border-radius:3px;"
+            "padding:5px 8px; color:#D4D4D4; font-size:12px;")
+        self._gallery_search.textChanged.connect(self._filter_gallery)
+        vbox.addWidget(self._gallery_search)
+
+        # Scrollable list
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea{border:none;background:transparent;}")
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        self._gallery_container = QWidget()
+        self._gallery_layout    = QVBoxLayout(self._gallery_container)
+        self._gallery_layout.setContentsMargins(0, 4, 0, 4)
+        self._gallery_layout.setSpacing(4)
+        self._gallery_cards = []
+
+        for ex in self.GALLERY_EXAMPLES:
+            card = self._make_gallery_card(ex)
+            self._gallery_layout.addWidget(card)
+            self._gallery_cards.append((ex, card))
+
+        self._gallery_layout.addStretch()
+        scroll.setWidget(self._gallery_container)
+        vbox.addWidget(scroll)
+
+        self._gallery_dock.setWidget(panel)
+        self._gallery_dock.hide()
+
+    def _make_gallery_card(self, ex: dict) -> QWidget:
+        card = QWidget()
+        card.setStyleSheet(
+            "QWidget{background:#1A1D27;border:1px solid #2A2E42;"
+            "border-radius:3px;padding:2px;}"
+            "QWidget:hover{border-color:#4EC9B0;}")
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(3)
+
+        # Title row
+        title_row = QHBoxLayout()
+        icon_lbl  = QLabel(ex["icon"]); icon_lbl.setFixedWidth(20)
+        title_lbl = QLabel(f"<b>{ex['title']}</b>")
+        title_lbl.setStyleSheet("color:#4EC9B0; font-size:12px;")
+        open_btn  = QPushButton("Open")
+        open_btn.setFixedWidth(46)
+        open_btn.setStyleSheet(
+            "QPushButton{background:#E2543C;color:#1a0a07;font-size:10px;"
+            "font-weight:bold;padding:3px 6px;border:none;border-radius:2px;}"
+            "QPushButton:hover{background:#ee6b53;}")
+        open_btn.clicked.connect(lambda _, f=ex["file"]: self._gallery_open(f))
+        title_row.addWidget(icon_lbl)
+        title_row.addWidget(title_lbl, 1)
+        title_row.addWidget(open_btn)
+        layout.addLayout(title_row)
+
+        # Description
+        desc_lbl = QLabel(ex["desc"])
+        desc_lbl.setWordWrap(True)
+        desc_lbl.setStyleSheet("color:#7A7F9A; font-size:11px;")
+        layout.addWidget(desc_lbl)
+
+        # Tags
+        tag_row = QHBoxLayout()
+        tag_row.setSpacing(4)
+        for tag in ex["tags"]:
+            color = "#E2543C" if tag in ("new","v0.7.0") else "#2A2E42"
+            tc    = "#F2EBDD" if tag in ("new","v0.7.0") else "#7A7F9A"
+            t = QLabel(tag)
+            t.setStyleSheet(
+                f"background:{color};color:{tc};font-size:9px;"
+                "padding:1px 5px;border-radius:2px;")
+            tag_row.addWidget(t)
+        tag_row.addStretch()
+        layout.addLayout(tag_row)
+
+        return card
+
+    def _gallery_open(self, filename: str):
+        """Open an example file from the examples/ directory."""
+        import os as _os
+        base   = _os.path.dirname(_os.path.abspath(__file__))
+        path   = _os.path.join(base, "mylang", "examples", filename)
+        if _os.path.isfile(path):
+            self.open_file(path)
+            self.status.showMessage(f"Opened example: {filename}")
+        else:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Not Found",
+                f"Example file not found:\n{path}")
+
+    def _filter_gallery(self, text: str):
+        text = text.lower().strip()
+        for ex, card in self._gallery_cards:
+            visible = (not text or
+                       text in ex["title"].lower() or
+                       text in ex["desc"].lower() or
+                       any(text in t for t in ex["tags"]))
+            card.setVisible(visible)
+
+    def _toggle_gallery_panel(self):
+        self._gallery_dock.setVisible(not self._gallery_dock.isVisible())
+
+    def _show_gallery(self):
+        self._gallery_dock.show()
 
     # ── Settings dialog ───────────────────────────────────────────────────────
 
