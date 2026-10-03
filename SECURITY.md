@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-This is a Alpha release and only meant for teting enviroment or sandbox enviroment  
+This is a Alpha release and only meant for testing enviroment or sandbox enviroment  
 
 | Version | Supported          |
 | ------- | ------------------ |
@@ -15,5 +15,5 @@ This is a Alpha release and only meant for teting enviroment or sandbox envirome
 
 To report a vulnerability.
 
-Send an email
+# Send an email
 
